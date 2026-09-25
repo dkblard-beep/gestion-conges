@@ -4,501 +4,332 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Suivi Congés & RTT</title>
-    <!-- Chargement de Tailwind CSS pour le style -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-        
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #0f172a; /* slate-950 */
-            color: #f8fafc; /* slate-50 */
+            background-color: #0f172a;
+            color: #f8fafc;
             background-image: 
                 radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.15) 0px, transparent 50%),
                 radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.1) 0px, transparent 50%);
             background-attachment: fixed;
             min-height: 100vh;
         }
-
         .glass-card {
-            background: rgba(30, 41, 59, 0.6); /* slate-800 with opacity */
+            background: rgba(30, 41, 59, 0.6);
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(71, 85, 105, 0.4); /* slate-600 */
+            border: 1px solid rgba(71, 85, 105, 0.4);
             border-radius: 1.25rem;
             box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
             padding: 1.75rem;
             margin-bottom: 1.5rem;
             transition: transform 0.3s ease, box-shadow 0.3s ease;
         }
-
-        /* Custom scrollbar for webkit */
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-        ::-webkit-scrollbar-track {
-            background: rgba(15, 23, 42, 0.5);
-        }
-        ::-webkit-scrollbar-thumb {
-            background: rgba(71, 85, 105, 0.8);
-            border-radius: 10px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: rgba(100, 116, 139, 1);
-        }
     </style>
 </head>
 <body class="antialiased p-4 sm:p-8">
-
     <div class="max-w-4xl mx-auto space-y-8">
         
-        <!-- En-tête -->
-        <header class="text-center space-y-2 mt-4 mb-10">
-            <h1 class="text-4xl sm:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400 tracking-tight">
-                Suivi Congés & RTT
-            </h1>
-            <p class="text-slate-400 font-medium">Gérez votre temps libre en toute simplicité</p>
+        <header class="flex justify-between items-center mt-4 mb-10">
+            <div>
+                <h1 class="text-3xl sm:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400 tracking-tight">
+                    Suivi Congés & RTT
+                </h1>
+                <p class="text-slate-400 font-medium mt-2">Gérez votre temps libre automatiquement</p>
+            </div>
+            <button onclick="toggleConfig()" class="p-3 bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700 rounded-xl transition-colors border border-slate-700 shadow-sm" title="Paramètres">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+            </button>
         </header>
 
-        <!-- Sélecteur d'année -->
-        <div class="flex justify-center items-center gap-4">
-            <label for="annee-select" class="font-semibold text-slate-300 text-sm sm:text-base uppercase tracking-wider">Année de référence :</label>
-            <div class="relative">
-                <select id="annee-select" onchange="changerAnnee()" class="appearance-none block w-40 rounded-xl bg-slate-900 border border-slate-700 text-blue-400 font-bold text-center py-2.5 px-4 shadow-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors cursor-pointer">
-                    <!-- Les options seront générées en JS -->
-                </select>
-                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-400">
-                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                </div>
-            </div>
-            <button onclick="toggleConfig()" class="p-2.5 bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700 rounded-xl transition-colors border border-slate-700 shadow-sm" title="Paramètres">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-            </button>
-        </div>
-
-        <!-- Tableau de bord des soldes -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            <div class="glass-card flex flex-col items-center justify-center relative overflow-hidden group">
-                <div class="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                <h2 class="text-sm font-bold text-slate-400 uppercase tracking-widest mb-2 z-10">Congés Payés (CP)</h2>
-                <div class="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-br from-blue-400 to-indigo-400 z-10" id="solde-cp">0</div>
-                <div class="text-xs font-medium text-slate-500 mt-2 z-10 bg-slate-900/50 px-3 py-1 rounded-full border border-slate-800">jours restants</div>
-            </div>
-            
-            <div class="glass-card flex flex-col items-center justify-center relative overflow-hidden group">
-                <div class="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                <h2 class="text-sm font-bold text-slate-400 uppercase tracking-widest mb-2 z-10">RTT</h2>
-                <div class="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-br from-emerald-400 to-teal-400 z-10" id="solde-rtt">0</div>
-                <div class="text-xs font-medium text-slate-500 mt-2 z-10 bg-slate-900/50 px-3 py-1 rounded-full border border-slate-800">jours restants</div>
-            </div>
-        </div>
-
-        <!-- Section Configuration -->
+        <!-- Configuration -->
         <div id="config-section" class="glass-card hidden">
-            <div class="flex items-center gap-3 mb-6 border-b border-slate-700/50 pb-4">
-                <div class="p-2 bg-slate-800 rounded-lg"><svg class="w-5 h-5 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg></div>
-                <h3 class="text-xl font-bold text-slate-200">Configuration des soldes</h3>
-            </div>
-            
-            <div class="flex flex-col sm:flex-row gap-5 items-end">
-                <div class="flex-1 w-full">
-                    <label for="init-cp" class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Total CP Acquis</label>
-                    <input type="number" id="init-cp" step="0.5" class="block w-full rounded-xl bg-slate-900 border border-slate-700 text-slate-200 py-2.5 px-4 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors" placeholder="Ex: 25">
+            <h3 class="text-xl font-bold text-slate-200 mb-6 border-b border-slate-700/50 pb-4">Configuration des soldes initiaux</h3>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Période CP (Juin <span id="label-cp-year"></span> - Mai <span id="label-cp-year-next"></span>)</label>
+                    <input type="number" id="init-cp" step="0.5" class="block w-full rounded-xl bg-slate-900 border border-slate-700 text-slate-200 py-2.5 px-4 focus:outline-none focus:border-blue-500 transition-colors">
                 </div>
-                <div class="flex-1 w-full">
-                    <label for="init-rtt" class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Total RTT Acquis</label>
-                    <input type="number" id="init-rtt" step="0.5" class="block w-full rounded-xl bg-slate-900 border border-slate-700 text-slate-200 py-2.5 px-4 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors" placeholder="Ex: 10">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Année RTT (<span id="label-rtt-year"></span>)</label>
+                    <input type="number" id="init-rtt" step="0.5" class="block w-full rounded-xl bg-slate-900 border border-slate-700 text-slate-200 py-2.5 px-4 focus:outline-none focus:border-emerald-500 transition-colors">
                 </div>
-                <button onclick="mettreAJourSoldesInitiaux()" class="w-full sm:w-auto bg-slate-700 hover:bg-slate-600 text-white font-semibold py-2.5 px-6 rounded-xl transition-all duration-200 hover:-translate-y-0.5 shadow-lg shadow-slate-900/50">
-                    Mettre à jour
-                </button>
             </div>
-            <p class="text-[11px] font-medium text-amber-500/80 mt-3 flex items-center gap-1.5">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                Astuce : Renseignez les soldes initiaux pour calculer vos restes.
-            </p>
+            <div class="mt-6 flex justify-end">
+                <button onclick="sauvegarderConfig()" class="bg-slate-700 hover:bg-slate-600 text-white font-semibold py-2 px-6 rounded-xl transition-all">Enregistrer</button>
+            </div>
         </div>
 
-        <!-- Formulaire Nouvelle Absence -->
-        <div class="glass-card relative overflow-hidden">
-            <!-- Accent border top -->
-            <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-emerald-500"></div>
-            
-            <div class="flex items-center gap-3 mb-6 border-b border-slate-700/50 pb-4 mt-2">
-                <div class="p-2 bg-slate-800 rounded-lg"><svg class="w-5 h-5 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg></div>
-                <h3 class="text-xl font-bold text-slate-200">Déclarer une absence</h3>
+        <!-- Dashboard -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <!-- CP Card -->
+            <div class="glass-card relative overflow-hidden group">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-sm font-bold text-blue-400 uppercase tracking-widest">Congés Payés</h2>
+                    <select id="select-cp-period" onchange="changerPeriodeCP()" class="bg-slate-900 text-xs text-slate-300 border border-slate-700 rounded-lg py-1 px-2 focus:outline-none"></select>
+                </div>
+                <div class="flex flex-col items-center justify-center">
+                    <div class="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-br from-blue-400 to-indigo-400" id="solde-cp">0</div>
+                    <div class="text-xs font-medium text-slate-500 mt-2">jours restants</div>
+                </div>
             </div>
-            
+            <!-- RTT Card -->
+            <div class="glass-card relative overflow-hidden group">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-sm font-bold text-emerald-400 uppercase tracking-widest">RTT</h2>
+                    <select id="select-rtt-period" onchange="changerPeriodeRTT()" class="bg-slate-900 text-xs text-slate-300 border border-slate-700 rounded-lg py-1 px-2 focus:outline-none"></select>
+                </div>
+                <div class="flex flex-col items-center justify-center">
+                    <div class="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-br from-emerald-400 to-teal-400" id="solde-rtt">0</div>
+                    <div class="text-xs font-medium text-slate-500 mt-2">jours restants</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add Absence -->
+        <div class="glass-card relative overflow-hidden">
+            <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-emerald-500"></div>
+            <h3 class="text-xl font-bold text-slate-200 mb-6 border-b border-slate-700/50 pb-4 mt-2">Déclarer une absence</h3>
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 items-end">
                 <div class="w-full">
-                    <label for="type-absence" class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Type</label>
-                    <div class="relative">
-                        <select id="type-absence" class="appearance-none block w-full rounded-xl bg-slate-900 border border-slate-700 text-slate-200 py-2.5 px-4 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors cursor-pointer">
-                            <option value="CP">Congé Payé (CP)</option>
-                            <option value="RTT">RTT</option>
-                        </select>
-                        <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-500">
-                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                        </div>
-                    </div>
+                    <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Type</label>
+                    <select id="type-absence" class="block w-full rounded-xl bg-slate-900 border border-slate-700 text-slate-200 py-2.5 px-4 focus:outline-none focus:border-blue-500">
+                        <option value="CP">Congé Payé (CP)</option>
+                        <option value="RTT">RTT</option>
+                    </select>
                 </div>
                 <div class="w-full">
-                    <label for="date-debut" class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Date</label>
-                    <input type="date" id="date-debut" class="block w-full rounded-xl bg-slate-900 border border-slate-700 text-slate-200 py-2.5 px-4 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors [color-scheme:dark]">
+                    <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Date</label>
+                    <input type="date" id="date-debut" class="block w-full rounded-xl bg-slate-900 border border-slate-700 text-slate-200 py-2.5 px-4 focus:outline-none focus:border-blue-500 [color-scheme:dark]">
                 </div>
                 <div class="w-full">
-                    <label for="duree-absence" class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Durée (jours)</label>
-                    <input type="number" id="duree-absence" step="0.5" min="0.5" value="1" class="block w-full rounded-xl bg-slate-900 border border-slate-700 text-slate-200 py-2.5 px-4 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors">
+                    <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Durée (jours)</label>
+                    <input type="number" id="duree-absence" step="0.5" min="0.5" value="1" class="block w-full rounded-xl bg-slate-900 border border-slate-700 text-slate-200 py-2.5 px-4 focus:outline-none focus:border-blue-500">
                 </div>
-                <button onclick="ajouterAbsence()" class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold py-2.5 px-6 rounded-xl transition-all duration-200 hover:-translate-y-0.5 shadow-lg shadow-blue-900/30">
-                    Ajouter
-                </button>
+                <button onclick="ajouterAbsence()" class="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-white font-bold py-2.5 px-6 rounded-xl transition-all shadow-lg shadow-blue-500/25">Ajouter</button>
             </div>
             
-            <!-- Message d'erreur / Info -->
-            <div id="error-message" class="hidden mt-5 bg-red-900/30 border border-red-500/50 text-red-300 px-4 py-3 rounded-xl flex items-center gap-3" role="alert">
-                <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                <span class="text-sm font-medium" id="error-text"></span>
-            </div>
-            
-            <div id="success-message" class="hidden mt-5 bg-emerald-900/30 border border-emerald-500/50 text-emerald-300 px-4 py-3 rounded-xl flex items-center gap-3" role="alert">
-                <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                <span class="text-sm font-medium" id="success-text"></span>
+            <div id="error-message" class="hidden mt-5 bg-red-900/30 border border-red-500/50 text-red-300 px-4 py-3 rounded-xl">
+                <span id="error-text"></span>
             </div>
         </div>
 
-        <!-- Historique -->
+        <!-- History -->
         <div class="glass-card">
-            <div class="flex justify-between items-center mb-6 border-b border-slate-700/50 pb-4">
-                <div class="flex items-center gap-3">
-                    <div class="p-2 bg-slate-800 rounded-lg"><svg class="w-5 h-5 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></div>
-                    <h3 class="text-xl font-bold text-slate-200">Historique des prises</h3>
-                </div>
-                <button onclick="effacerHistorique()" class="text-xs font-semibold text-red-400 hover:text-red-300 bg-red-400/10 hover:bg-red-400/20 px-3 py-1.5 rounded-lg transition-colors border border-red-500/20">
-                    Tout effacer
-                </button>
-            </div>
-            
+            <h3 class="text-xl font-bold text-slate-200 mb-6 border-b border-slate-700/50 pb-4">Historique</h3>
             <div class="overflow-hidden rounded-xl border border-slate-700/50 bg-slate-900/50">
-                <div id="historique-list" class="divide-y divide-slate-700/30">
-                    <!-- Les lignes d'historique seront injectées ici par JavaScript -->
-                </div>
-            </div>
-            
-            <div id="historique-vide" class="text-center py-12 hidden">
-                <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-800/50 mb-4">
-                    <svg class="w-8 h-8 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path></svg>
-                </div>
-                <p class="text-slate-400 font-medium">Aucune absence déclarée pour le moment.</p>
+                <div id="historique-list" class="divide-y divide-slate-700/30"></div>
+                <div id="historique-vide" class="text-center py-8 hidden text-slate-400 font-medium">Aucune absence enregistrée.</div>
             </div>
         </div>
         
-        <footer class="text-center pb-8 text-xs text-slate-500 font-medium">
-            <p>Application de suivi des congés & RTT • Vos données sont synchronisées sur Google Sheets</p>
-        </footer>
     </div>
 
-    <!-- SCRIPT GESTION DES DONNÉES (GOOGLE SHEETS) -->
     <script>
         const GOOGLE_SHEETS_URL = "https://script.google.com/macros/s/AKfycbxkp3pcNRAZ5ufwrMaaq4T8VS260l8YxtZd3qh8p3VhVGs_c2OHtnTfpotGiT1OCJjV7g/exec";
 
-        // État de l'application
-        let appData = {
-            currentYear: new Date().getFullYear().toString(),
-            years: {}
-        };
+        let appData = { absences: [], configCP: {}, configRTT: {} };
+        let currentCPPeriod = "";
+        let currentRTTPeriod = "";
 
-        // Charge les données au démarrage
-        async function initApp() {
-            showSuccess("Synchronisation avec Google Sheets en cours...", true);
-            
-            try {
-                const response = await fetch(GOOGLE_SHEETS_URL, {
-                    method: 'GET',
-                    credentials: 'omit'
-                });
-                if (!response.ok) throw new Error("Erreur réseau");
-                
-                const data = await response.json();
-                
-                if (data && Object.keys(data).length > 0) {
-                    appData = data;
-                    showSuccess("Données synchronisées avec succès !");
-                } else {
-                    appData = { currentYear: new Date().getFullYear().toString(), years: {} };
-                    showSuccess("Nouvelle base de données initialisée.");
-                }
-            } catch (error) {
-                console.error("Erreur de récupération depuis Google Sheets:", error);
-                
-                // Fallback sur le localStorage
-                const localDataStr = localStorage.getItem('conges_rtt_data');
-                if (localDataStr) {
-                    try {
-                        appData = JSON.parse(localDataStr);
-                        showError("Erreur Google Sheets. Utilisation de la sauvegarde locale hors-ligne.");
-                    } catch(e) { }
-                } else {
-                    showError("Impossible de joindre Google Sheets, aucune donnée locale.");
-                }
-            }
-            
-            getCurrentYearData();
-            genererOptionsAnnees();
-            document.getElementById('annee-select').value = appData.currentYear || new Date().getFullYear().toString();
-            document.getElementById('date-debut').valueAsDate = new Date();
-            window.mettreAJourAffichage();
+        // Utilitaires de dates
+        function getCPPeriod(dateStr) {
+            const d = new Date(dateStr);
+            const y = d.getFullYear();
+            return (d.getMonth() < 5) ? (y - 1).toString() : y.toString();
+        }
+        function getRTTPeriod(dateStr) {
+            return new Date(dateStr).getFullYear().toString();
+        }
+        function formatCPPeriod(year) {
+            return `Juin ${year} - Mai ${parseInt(year)+1}`;
         }
 
-        function getCurrentYearData() {
-            if (!appData.years[appData.currentYear]) {
-                appData.years[appData.currentYear] = { soldeInitialCP: 0, soldeInitialRTT: 0, absences: [] };
+        async function initApp() {
+            const today = new Date().toISOString().split('T')[0];
+            currentCPPeriod = getCPPeriod(today);
+            currentRTTPeriod = getRTTPeriod(today);
+            document.getElementById('date-debut').value = today;
+
+            try {
+                const response = await fetch(GOOGLE_SHEETS_URL, { method: 'GET', credentials: 'omit' });
+                if (!response.ok) throw new Error("Réseau");
+                const data = await response.json();
+                appData = migrateData(data);
+            } catch (e) {
+                const local = localStorage.getItem('conges_rtt_data_v2');
+                if (local) { appData = JSON.parse(local); showError("Mode hors-ligne."); }
             }
-            return appData.years[appData.currentYear];
+            
+            updateSelectors();
+            mettreAJourAffichage();
+        }
+
+        function migrateData(data) {
+            if (!data) return { absences: [], configCP: {}, configRTT: {} };
+            if (data.years && !data.migrated_v2) {
+                let newData = { absences: [], configCP: {}, configRTT: {}, migrated_v2: true };
+                for (let y in data.years) {
+                    newData.configCP[y] = data.years[y].soldeInitialCP || 0;
+                    newData.configRTT[y] = data.years[y].soldeInitialRTT || 0;
+                    if (data.years[y].absences) newData.absences.push(...data.years[y].absences);
+                }
+                return newData;
+            }
+            return data;
         }
 
         async function sauvegarderDonneesCloud() {
-            // Sauvegarde locale systématique (sécurité)
-            localStorage.setItem('conges_rtt_data', JSON.stringify(appData));
-            
+            localStorage.setItem('conges_rtt_data_v2', JSON.stringify(appData));
             try {
-                // Utilisation de text/plain (implicite avec stringify) et no-cors pour éviter le blocage CORS en POST sur Google Script
-                // Google Apps script gèrera le payload stringifié.
                 fetch(GOOGLE_SHEETS_URL, {
-                    method: "POST",
-                    mode: "no-cors",
-                    credentials: "omit",
-                    headers: {
-                        "Content-Type": "text/plain"
-                    },
+                    method: "POST", mode: "no-cors", credentials: "omit",
+                    headers: { "Content-Type": "text/plain" },
                     body: JSON.stringify(appData)
-                }).then(() => {
-                    showSuccess("Modifications sauvegardées sur Google Sheets !");
-                }).catch(err => {
-                    throw err;
                 });
-                
-            } catch (e) {
-                console.error("Erreur lors de la sauvegarde:", e);
-                showError("Sauvegarde Google Sheets échouée. Données sauvegardées localement.");
-            }
+            } catch (e) {}
         }
 
-        function genererOptionsAnnees() {
-            const select = document.getElementById('annee-select');
-            select.innerHTML = '';
+        function updateSelectors() {
+            let cpSet = new Set(Object.keys(appData.configCP));
+            cpSet.add(currentCPPeriod);
+            let cpArr = Array.from(cpSet).sort().reverse();
             
-            const anneeCouranteNum = new Date().getFullYear();
-            let anneesSet = new Set(Object.keys(appData.years));
-            anneesSet.add(anneeCouranteNum.toString());
-            anneesSet.add((anneeCouranteNum + 1).toString());
-            anneesSet.add((anneeCouranteNum - 1).toString());
-
-            const anneesTriees = Array.from(anneesSet).sort((a, b) => b - a);
-
-            anneesTriees.forEach(annee => {
-                const option = document.createElement('option');
-                option.value = annee;
-                option.textContent = annee;
-                select.appendChild(option);
+            const selCP = document.getElementById('select-cp-period');
+            selCP.innerHTML = '';
+            cpArr.forEach(y => {
+                const opt = document.createElement('option');
+                opt.value = y; opt.textContent = formatCPPeriod(y);
+                selCP.appendChild(opt);
             });
+            selCP.value = currentCPPeriod;
+
+            let rttSet = new Set(Object.keys(appData.configRTT));
+            rttSet.add(currentRTTPeriod);
+            let rttArr = Array.from(rttSet).sort().reverse();
+            
+            const selRTT = document.getElementById('select-rtt-period');
+            selRTT.innerHTML = '';
+            rttArr.forEach(y => {
+                const opt = document.createElement('option');
+                opt.value = y; opt.textContent = y;
+                selRTT.appendChild(opt);
+            });
+            selRTT.value = currentRTTPeriod;
         }
 
-        window.changerAnnee = function() {
-            appData.currentYear = document.getElementById('annee-select').value;
-            getCurrentYearData();
-            sauvegarderDonneesCloud();
-            window.mettreAJourAffichage();
-        };
-
-        function calculerSoldes() {
-            let totalPrisCP = 0;
-            let totalPrisRTT = 0;
-            const currentData = getCurrentYearData();
-
-            currentData.absences.forEach(absence => {
-                if (absence.type === 'CP') {
-                    totalPrisCP += parseFloat(absence.duree);
-                } else if (absence.type === 'RTT') {
-                    totalPrisRTT += parseFloat(absence.duree);
-                }
-            });
-
-            const resteCP = parseFloat(currentData.soldeInitialCP) - totalPrisCP;
-            const resteRTT = parseFloat(currentData.soldeInitialRTT) - totalPrisRTT;
-
-            return { resteCP, resteRTT };
+        window.changerPeriodeCP = function() {
+            currentCPPeriod = document.getElementById('select-cp-period').value;
+            mettreAJourAffichage();
+        }
+        window.changerPeriodeRTT = function() {
+            currentRTTPeriod = document.getElementById('select-rtt-period').value;
+            mettreAJourAffichage();
         }
 
         window.mettreAJourAffichage = function() {
-            const soldes = calculerSoldes();
-            const currentData = getCurrentYearData();
+            const initCP = appData.configCP[currentCPPeriod] || 0;
+            const prisCP = appData.absences
+                .filter(a => a.type === 'CP' && getCPPeriod(a.date) === currentCPPeriod)
+                .reduce((s, a) => s + a.duree, 0);
+            const resteCP = initCP - prisCP;
             
-            document.getElementById('solde-cp').textContent = soldes.resteCP % 1 === 0 ? soldes.resteCP : soldes.resteCP.toFixed(1);
-            document.getElementById('solde-rtt').textContent = soldes.resteRTT % 1 === 0 ? soldes.resteRTT : soldes.resteRTT.toFixed(1);
+            const initRTT = appData.configRTT[currentRTTPeriod] || 0;
+            const prisRTT = appData.absences
+                .filter(a => a.type === 'RTT' && getRTTPeriod(a.date) === currentRTTPeriod)
+                .reduce((s, a) => s + a.duree, 0);
+            const resteRTT = initRTT - prisRTT;
 
-            document.getElementById('init-cp').value = currentData.soldeInitialCP || '';
-            document.getElementById('init-rtt').value = currentData.soldeInitialRTT || '';
+            document.getElementById('solde-cp').textContent = resteCP % 1 === 0 ? resteCP : resteCP.toFixed(1);
+            document.getElementById('solde-rtt').textContent = resteRTT % 1 === 0 ? resteRTT : resteRTT.toFixed(1);
+            
+            document.getElementById('init-cp').value = initCP || '';
+            document.getElementById('init-rtt').value = initRTT || '';
+            document.getElementById('label-cp-year').textContent = currentCPPeriod;
+            document.getElementById('label-cp-year-next').textContent = parseInt(currentCPPeriod)+1;
+            document.getElementById('label-rtt-year').textContent = currentRTTPeriod;
 
             renderHistorique();
-        };
-
-        // Fonction d'affichage du tableau
-        function renderHistorique() {
-            const tbody = document.getElementById('historique-list');
-            const emptyMessage = document.getElementById('historique-vide');
-            const tableContainer = tbody.parentElement;
-            const currentData = getCurrentYearData();
-            tbody.innerHTML = ''; 
-
-            if (!currentData.absences || currentData.absences.length === 0) {
-                emptyMessage.classList.remove('hidden');
-                tableContainer.classList.add('hidden');
-            } else {
-                emptyMessage.classList.add('hidden');
-                tableContainer.classList.remove('hidden');
-
-                const absencesTriees = [...currentData.absences].sort((a, b) => new Date(b.date) - new Date(a.date));
-
-                absencesTriees.forEach(absence => {
-                    const item = document.createElement('div');
-                    item.className = "flex items-center justify-between p-4 sm:px-5 sm:py-4 hover:bg-slate-800/30 transition-colors";
-                    
-                    const isCP = absence.type === 'CP';
-                    const typeColorClass = isCP 
-                        ? 'text-blue-400 bg-blue-400/10 border-blue-500/20' 
-                        : 'text-emerald-400 bg-emerald-400/10 border-emerald-500/20';
-                    
-                    const typeBadge = `<span class="w-12 text-center px-2 py-1 inline-block text-[10px] uppercase font-bold tracking-wider rounded-lg border ${typeColorClass}">${absence.type}</span>`;
-                    
-                    const dateObj = new Date(absence.date);
-                    const dateAffichee = dateObj.toLocaleDateString('fr-FR');
-                    const dureeAffichee = absence.duree + (absence.duree > 1 ? ' jours' : ' jour');
-
-                    item.innerHTML = `
-                        <div class="flex items-center gap-4">
-                            <div>${typeBadge}</div>
-                            <div class="flex flex-col">
-                                <span class="text-sm font-medium text-slate-200">${dateAffichee}</span>
-                                <span class="text-xs font-semibold text-slate-400">${dureeAffichee}</span>
-                            </div>
-                        </div>
-                        <div>
-                            <button onclick="supprimerAbsence(${absence.id})" class="p-2 text-slate-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors focus:outline-none" title="Supprimer">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                            </button>
-                        </div>
-                    `;
-                    tbody.appendChild(item);
-                });
-            }
         }
 
-        function showError(message) {
-            const errorDiv = document.getElementById('error-message');
-            document.getElementById('error-text').textContent = message;
-            errorDiv.classList.remove('hidden');
-            document.getElementById('success-message').classList.add('hidden');
-            setTimeout(() => {
-                errorDiv.classList.add('hidden');
-            }, 5000);
-        }
-        
-        function showSuccess(message, permanent = false) {
-            const successDiv = document.getElementById('success-message');
-            document.getElementById('success-text').textContent = message;
-            successDiv.classList.remove('hidden');
-            document.getElementById('error-message').classList.add('hidden');
-            
-            if (!permanent) {
-                setTimeout(() => {
-                    successDiv.classList.add('hidden');
-                }, 4000);
-            }
-        }
-
-        window.mettreAJourSoldesInitiaux = function() {
-            const cpInput = document.getElementById('init-cp').value;
-            const rttInput = document.getElementById('init-rtt').value;
-            const currentData = getCurrentYearData();
-
-            currentData.soldeInitialCP = parseFloat(cpInput) || 0;
-            currentData.soldeInitialRTT = parseFloat(rttInput) || 0;
-            // On conserve l'historique des absences lors de la mise à jour des soldes, contrairement au message d'avertissement précédent qui écrasait.
-            // Wait, si l'utilisateur met à jour, il vaut mieux garder l'historique. 
-            // currentData.absences = []; // REMOVED to prevent data loss.
-
+        window.sauvegarderConfig = function() {
+            appData.configCP[currentCPPeriod] = parseFloat(document.getElementById('init-cp').value) || 0;
+            appData.configRTT[currentRTTPeriod] = parseFloat(document.getElementById('init-rtt').value) || 0;
             sauvegarderDonneesCloud();
-            window.mettreAJourAffichage();
-        };
+            mettreAJourAffichage();
+            toggleConfig();
+        }
 
         window.ajouterAbsence = function() {
             const type = document.getElementById('type-absence').value;
             const date = document.getElementById('date-debut').value;
             const duree = parseFloat(document.getElementById('duree-absence').value);
-            const currentData = getCurrentYearData();
 
-            if (!date) return showError("Veuillez sélectionner une date.");
-            if (isNaN(duree) || duree <= 0) return showError("La durée doit être un nombre positif.");
+            if (!date || isNaN(duree) || duree <= 0) return showError("Saisie invalide.");
 
-            currentData.absences.push({
-                id: Date.now(),
-                type: type,
-                date: date,
-                duree: duree
-            });
-
+            appData.absences.push({ id: Date.now(), type, date, duree });
             sauvegarderDonneesCloud();
+            updateSelectors();
+            mettreAJourAffichage();
             document.getElementById('duree-absence').value = 1;
-            window.mettreAJourAffichage();
-        };
+        }
 
         window.supprimerAbsence = function(id) {
-            const currentData = getCurrentYearData();
-            currentData.absences = currentData.absences.filter(absence => absence.id !== id);
+            appData.absences = appData.absences.filter(a => a.id !== id);
             sauvegarderDonneesCloud();
-            window.mettreAJourAffichage();
-        };
+            mettreAJourAffichage();
+        }
 
-        window.effacerHistorique = function() {
+        function renderHistorique() {
             const tbody = document.getElementById('historique-list');
-            const currentData = getCurrentYearData();
-            if(!currentData.absences || currentData.absences.length === 0) return;
+            const empty = document.getElementById('historique-vide');
+            tbody.innerHTML = '';
             
-            tbody.innerHTML = `
-                <div class="p-6 text-center bg-red-900/10 border-y border-red-500/20">
-                    <div class="flex flex-col items-center justify-center space-y-4">
-                        <div class="p-3 bg-red-500/20 rounded-full">
-                            <svg class="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-                        </div>
-                        <p class="text-slate-300 font-medium">Êtes-vous sûr de vouloir vider l'historique de ${appData.currentYear} ?</p>
-                        <div class="flex gap-3">
-                            <button onclick="confirmerEffacement()" class="bg-red-500 hover:bg-red-400 text-white font-bold px-5 py-2 rounded-lg transition-colors">Oui, effacer</button>
-                            <button onclick="mettreAJourAffichage()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold px-5 py-2 rounded-lg transition-colors">Annuler</button>
+            if (appData.absences.length === 0) {
+                empty.classList.remove('hidden');
+                return;
+            }
+            empty.classList.add('hidden');
+
+            const tries = [...appData.absences].sort((a,b) => new Date(b.date) - new Date(a.date));
+            tries.forEach(a => {
+                const item = document.createElement('div');
+                item.className = "flex items-center justify-between p-4 sm:px-5 hover:bg-slate-800/30";
+                
+                const badgeClass = a.type === 'CP' ? 'text-blue-400 bg-blue-400/10' : 'text-emerald-400 bg-emerald-400/10';
+                const periodTag = a.type === 'CP' ? formatCPPeriod(getCPPeriod(a.date)) : getRTTPeriod(a.date);
+
+                item.innerHTML = `
+                    <div class="flex items-center gap-4">
+                        <span class="w-12 text-center px-2 py-1 rounded-lg border border-slate-700/50 ${badgeClass} text-[10px] font-bold">${a.type}</span>
+                        <div class="flex flex-col">
+                            <span class="text-sm font-medium text-slate-200">${new Date(a.date).toLocaleDateString('fr-FR')} <span class="text-[10px] text-slate-500 ml-2">(${periodTag})</span></span>
+                            <span class="text-xs font-semibold text-slate-400">${a.duree} jour(s)</span>
                         </div>
                     </div>
-                </div>
-            `;
-        };
-
-        window.confirmerEffacement = function() {
-             const currentData = getCurrentYearData();
-             currentData.absences = [];
-             sauvegarderDonneesCloud();
-             window.mettreAJourAffichage();
-        };
+                    <button onclick="supprimerAbsence(${a.id})" class="p-2 text-slate-500 hover:text-red-400">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    </button>
+                `;
+                tbody.appendChild(item);
+            });
+        }
 
         window.toggleConfig = function() {
-            const configSection = document.getElementById('config-section');
-            configSection.classList.toggle('hidden');
-        };
+            document.getElementById('config-section').classList.toggle('hidden');
+        }
 
-        // Démarrage
+        function showError(msg) { 
+            const err = document.getElementById('error-message');
+            document.getElementById('error-text').textContent = msg;
+            err.classList.remove('hidden');
+            setTimeout(() => err.classList.add('hidden'), 5000);
+        }
+
         window.onload = initApp;
-
     </script>
 </body>
 </html>
