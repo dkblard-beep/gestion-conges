@@ -181,20 +181,8 @@
             </div>
             
             <div class="overflow-hidden rounded-xl border border-slate-700/50 bg-slate-900/50">
-                <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-slate-700/50">
-                        <thead class="bg-slate-800/80">
-                            <tr>
-                                <th scope="col" class="px-5 py-3.5 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Type</th>
-                                <th scope="col" class="px-5 py-3.5 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Date</th>
-                                <th scope="col" class="px-5 py-3.5 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Durée</th>
-                                <th scope="col" class="px-5 py-3.5 text-right text-xs font-bold text-slate-400 uppercase tracking-wider">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody id="historique-list" class="divide-y divide-slate-700/30">
-                            <!-- Les lignes d'historique seront injectées ici par JavaScript -->
-                        </tbody>
-                    </table>
+                <div id="historique-list" class="divide-y divide-slate-700/30">
+                    <!-- Les lignes d'historique seront injectées ici par JavaScript -->
                 </div>
             </div>
             
@@ -360,7 +348,7 @@
         function renderHistorique() {
             const tbody = document.getElementById('historique-list');
             const emptyMessage = document.getElementById('historique-vide');
-            const tableContainer = tbody.parentElement.parentElement;
+            const tableContainer = tbody.parentElement;
             const currentData = getCurrentYearData();
             tbody.innerHTML = ''; 
 
@@ -374,33 +362,37 @@
                 const absencesTriees = [...currentData.absences].sort((a, b) => new Date(b.date) - new Date(a.date));
 
                 absencesTriees.forEach(absence => {
-                    const tr = document.createElement('tr');
-                    tr.className = "hover:bg-slate-800/30 transition-colors";
+                    const item = document.createElement('div');
+                    item.className = "flex items-center justify-between p-4 sm:px-5 sm:py-4 hover:bg-slate-800/30 transition-colors";
                     
                     const isCP = absence.type === 'CP';
                     const typeColorClass = isCP 
                         ? 'text-blue-400 bg-blue-400/10 border-blue-500/20' 
                         : 'text-emerald-400 bg-emerald-400/10 border-emerald-500/20';
                     
-                    const typeBadge = `<span class="px-2.5 py-1 inline-flex text-[10px] uppercase font-bold tracking-wider rounded-lg border ${typeColorClass}">${absence.type}</span>`;
+                    const typeBadge = `<span class="w-12 text-center px-2 py-1 inline-block text-[10px] uppercase font-bold tracking-wider rounded-lg border ${typeColorClass}">${absence.type}</span>`;
                     
                     const dateObj = new Date(absence.date);
                     const dateAffichee = dateObj.toLocaleDateString('fr-FR');
                     const dureeAffichee = absence.duree + (absence.duree > 1 ? ' jours' : ' jour');
 
-                    tr.innerHTML = `
-                        <td class="px-5 py-4 whitespace-nowrap">${typeBadge}</td>
-                        <td class="px-5 py-4 whitespace-nowrap text-sm font-medium text-slate-300">${dateAffichee}</td>
-                        <td class="px-5 py-4 whitespace-nowrap text-sm font-semibold text-slate-200">${dureeAffichee}</td>
-                        <td class="px-5 py-4 whitespace-nowrap text-right text-sm">
+                    item.innerHTML = `
+                        <div class="flex items-center gap-4">
+                            <div>${typeBadge}</div>
+                            <div class="flex flex-col">
+                                <span class="text-sm font-medium text-slate-200">${dateAffichee}</span>
+                                <span class="text-xs font-semibold text-slate-400">${dureeAffichee}</span>
+                            </div>
+                        </div>
+                        <div>
                             <button onclick="supprimerAbsence(${absence.id})" class="p-2 text-slate-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors focus:outline-none" title="Supprimer">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline-block" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                 </svg>
                             </button>
-                        </td>
+                        </div>
                     `;
-                    tbody.appendChild(tr);
+                    tbody.appendChild(item);
                 });
             }
         }
@@ -477,20 +469,18 @@
             if(!currentData.absences || currentData.absences.length === 0) return;
             
             tbody.innerHTML = `
-                <tr>
-                    <td colspan="4" class="px-5 py-8 text-center bg-red-900/10 border-t border-b border-red-500/20">
-                        <div class="flex flex-col items-center justify-center space-y-4">
-                            <div class="p-3 bg-red-500/20 rounded-full">
-                                <svg class="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-                            </div>
-                            <p class="text-slate-300 font-medium">Êtes-vous sûr de vouloir vider l'historique de ${appData.currentYear} ?</p>
-                            <div class="flex gap-3">
-                                <button onclick="confirmerEffacement()" class="bg-red-500 hover:bg-red-400 text-white font-bold px-5 py-2 rounded-lg transition-colors">Oui, effacer</button>
-                                <button onclick="mettreAJourAffichage()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold px-5 py-2 rounded-lg transition-colors">Annuler</button>
-                            </div>
+                <div class="p-6 text-center bg-red-900/10 border-y border-red-500/20">
+                    <div class="flex flex-col items-center justify-center space-y-4">
+                        <div class="p-3 bg-red-500/20 rounded-full">
+                            <svg class="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
                         </div>
-                    </td>
-                </tr>
+                        <p class="text-slate-300 font-medium">Êtes-vous sûr de vouloir vider l'historique de ${appData.currentYear} ?</p>
+                        <div class="flex gap-3">
+                            <button onclick="confirmerEffacement()" class="bg-red-500 hover:bg-red-400 text-white font-bold px-5 py-2 rounded-lg transition-colors">Oui, effacer</button>
+                            <button onclick="mettreAJourAffichage()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold px-5 py-2 rounded-lg transition-colors">Annuler</button>
+                        </div>
+                    </div>
+                </div>
             `;
         };
 
