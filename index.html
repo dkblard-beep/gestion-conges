@@ -226,7 +226,10 @@
             showSuccess("Synchronisation avec Google Sheets en cours...", true);
             
             try {
-                const response = await fetch(GOOGLE_SHEETS_URL);
+                const response = await fetch(GOOGLE_SHEETS_URL, {
+                    method: 'GET',
+                    credentials: 'omit'
+                });
                 if (!response.ok) throw new Error("Erreur réseau");
                 
                 const data = await response.json();
@@ -277,6 +280,7 @@
                 fetch(GOOGLE_SHEETS_URL, {
                     method: "POST",
                     mode: "no-cors",
+                    credentials: "omit",
                     headers: {
                         "Content-Type": "text/plain"
                     },
