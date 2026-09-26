@@ -105,20 +105,39 @@
         <!-- Retraite Card -->
         <div id="retraite-card" class="glass-card relative overflow-hidden group hidden">
             <div class="absolute inset-0 bg-gradient-to-r from-purple-500/10 to-pink-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-            <div class="flex flex-col sm:flex-row justify-between items-center gap-6 relative z-10">
+            
+            <div class="absolute top-3 right-3 z-20">
+                <button onclick="toggleRetraiteSize()" class="p-1.5 text-slate-500 hover:text-slate-300 bg-slate-800/50 hover:bg-slate-700/80 rounded-lg transition-colors" title="Masquer/Afficher les détails">
+                    <svg id="retraite-toggle-icon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
+                </button>
+            </div>
+
+            <div id="retraite-content-expanded" class="flex flex-col sm:flex-row justify-between items-center gap-6 relative z-10 transition-all duration-300">
                 
-                <div class="flex-1 text-center sm:text-left">
+                <div class="flex-1 text-center sm:text-left w-full mt-2 sm:mt-0">
                     <h2 class="text-sm font-bold text-purple-400 uppercase tracking-widest mb-1">Départ à la retraite (Légal)</h2>
-                    <div class="text-4xl sm:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-br from-purple-400 to-indigo-400" id="decompte-legal">--</div>
-                    <div class="text-xs font-medium text-slate-400 mt-2">prévu le <span id="date-legal-label">--</span></div>
+                    <div class="text-2xl sm:text-3xl lg:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-br from-purple-400 to-indigo-400" id="decompte-legal-detail">--</div>
+                    <div class="text-xs font-medium text-slate-400 mt-2">Soit <span id="decompte-legal" class="font-bold text-slate-300">--</span> jours — prévu le <span id="date-legal-label">--</span></div>
                 </div>
 
-                <div id="anticipe-container" class="flex-1 text-center sm:text-right hidden sm:border-l border-slate-700/50 sm:pl-6">
+                <div id="anticipe-container" class="flex-1 text-center sm:text-right w-full hidden sm:border-l border-slate-700/50 sm:pl-6">
                     <h2 class="text-sm font-bold text-pink-400 uppercase tracking-widest mb-1">Départ Anticipé</h2>
-                    <div class="text-4xl sm:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-br from-pink-400 to-rose-400" id="decompte-anticipe">--</div>
-                    <div class="text-xs font-medium text-slate-400 mt-2">prévu le <span id="date-anticipe-label">--</span></div>
+                    <div class="text-2xl sm:text-3xl lg:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-br from-pink-400 to-rose-400" id="decompte-anticipe-detail">--</div>
+                    <div class="text-xs font-medium text-slate-400 mt-2">Soit <span id="decompte-anticipe" class="font-bold text-slate-300">--</span> jours — prévu le <span id="date-anticipe-label">--</span></div>
                 </div>
 
+            </div>
+
+            <div id="retraite-content-minimized" class="hidden flex items-center justify-between relative z-10">
+                <div class="flex items-center gap-4">
+                    <div class="p-2 bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-lg">
+                        <svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    </div>
+                    <div>
+                        <h2 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Retraite</h2>
+                        <div class="text-sm sm:text-base font-bold text-slate-200" id="decompte-mini">--</div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -294,6 +313,48 @@
             updateRetraite();
         }
 
+        function getDetailedCountdown(targetDate) {
+            let d1 = new Date();
+            d1.setHours(0,0,0,0);
+            let d2 = new Date(targetDate);
+            d2.setHours(0,0,0,0);
+            
+            if (d1 >= d2) return { over: true };
+
+            let years = d2.getFullYear() - d1.getFullYear();
+            let months = d2.getMonth() - d1.getMonth();
+            let days = d2.getDate() - d1.getDate();
+
+            if (days < 0) {
+                months--;
+                let prevMonth = new Date(d2.getFullYear(), d2.getMonth(), 0).getDate();
+                days += prevMonth;
+            }
+            if (months < 0) {
+                years--;
+                months += 12;
+            }
+
+            return { over: false, years, months, days };
+        }
+
+        function formatDetailedCountdown(targetDate) {
+            const cd = getDetailedCountdown(targetDate);
+            if (cd.over) return "C'est l'heure !";
+            let parts = [];
+            if (cd.years > 0) parts.push(`${cd.years} an${cd.years > 1 ? 's' : ''}`);
+            if (cd.months > 0) parts.push(`${cd.months} mois`);
+            if (cd.days > 0) parts.push(`${cd.days} jour${cd.days > 1 ? 's' : ''}`);
+            return parts.join(', ') || "Aujourd'hui !";
+        }
+
+        window.toggleRetraiteSize = function() {
+            appData.configRetraite = appData.configRetraite || {};
+            appData.configRetraite.minimized = !appData.configRetraite.minimized;
+            sauvegarderDonneesCloud();
+            updateRetraite();
+        }
+
         function updateRetraite() {
             const r = appData.configRetraite || {};
             const card = document.getElementById('retraite-card');
@@ -307,24 +368,43 @@
             const today = new Date();
             today.setHours(0,0,0,0);
 
-            if (r.legal) {
-                const target = new Date(r.legal);
-                const diffTime = target - today;
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                document.getElementById('decompte-legal').textContent = diffDays > 0 ? `${diffDays} Jours` : "C'est l'heure !";
-                document.getElementById('date-legal-label').textContent = target.toLocaleDateString('fr-FR');
-            }
+            const expanded = document.getElementById('retraite-content-expanded');
+            const minimized = document.getElementById('retraite-content-minimized');
+            const icon = document.getElementById('retraite-toggle-icon');
 
-            const cAnticipe = document.getElementById('anticipe-container');
-            if (r.anticipe) {
-                cAnticipe.classList.remove('hidden');
-                const target = new Date(r.anticipe);
-                const diffTime = target - today;
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                document.getElementById('decompte-anticipe').textContent = diffDays > 0 ? `${diffDays} Jours` : "C'est l'heure !";
-                document.getElementById('date-anticipe-label').textContent = target.toLocaleDateString('fr-FR');
+            if (r.minimized) {
+                expanded.classList.add('hidden');
+                minimized.classList.remove('hidden');
+                icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7-7-7 7"></path>';
+                
+                const targetMini = r.anticipe ? new Date(r.anticipe) : new Date(r.legal);
+                document.getElementById('decompte-mini').textContent = formatDetailedCountdown(targetMini) + (r.anticipe ? ' (Anticipé)' : '');
             } else {
-                cAnticipe.classList.add('hidden');
+                expanded.classList.remove('hidden');
+                minimized.classList.add('hidden');
+                icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path>';
+
+                if (r.legal) {
+                    const target = new Date(r.legal);
+                    const diffTime = target - today;
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    document.getElementById('decompte-legal').textContent = diffDays > 0 ? diffDays : "0";
+                    document.getElementById('decompte-legal-detail').textContent = formatDetailedCountdown(target);
+                    document.getElementById('date-legal-label').textContent = target.toLocaleDateString('fr-FR');
+                }
+
+                const cAnticipe = document.getElementById('anticipe-container');
+                if (r.anticipe) {
+                    cAnticipe.classList.remove('hidden');
+                    const target = new Date(r.anticipe);
+                    const diffTime = target - today;
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    document.getElementById('decompte-anticipe').textContent = diffDays > 0 ? diffDays : "0";
+                    document.getElementById('decompte-anticipe-detail').textContent = formatDetailedCountdown(target);
+                    document.getElementById('date-anticipe-label').textContent = target.toLocaleDateString('fr-FR');
+                } else {
+                    cAnticipe.classList.add('hidden');
+                }
             }
         }
 
