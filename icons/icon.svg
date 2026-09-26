@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Background -->
+  <rect width="512" height="512" rx="112" fill="#0f172a"/>
+  
+  <!-- Calendar Base -->
+  <rect x="128" y="160" width="256" height="224" rx="32" fill="#1e293b" stroke="#8b5cf6" stroke-width="16"/>
+  
+  <!-- Calendar Header -->
+  <path d="M128 224h256M176 128v64M336 128v64" stroke="#ec4899" stroke-width="24" stroke-linecap="round"/>
+  
+  <!-- Sun / Vacation Element -->
+  <circle cx="256" cy="304" r="48" fill="#f472b6"/>
+  <path d="M256 224v16M256 368v16M192 304h16M304 304h16M211 259l11 11M290 338l11 11M211 349l11-11M290 270l11-11" stroke="#a78bfa" stroke-width="12" stroke-linecap="round"/>
+</svg>
