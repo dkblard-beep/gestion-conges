@@ -1,10 +1,11 @@
-const CACHE_NAME = 'conges-pwa-cache-v1';
+const CACHE_NAME = 'conges-pwa-cache-v2'; // Incrémenter la version force la mise à jour du cache
 const URLS_TO_CACHE = [
   './',
   './index.html',
   './manifest.json',
-  'https://cdn.tailwindcss.com',
-  'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap'
+  // FIX #10 : Tailwind CDN retiré du cache statique.
+  // CDN dynamique = version pouvant changer ; le cache navigateur standard s'en charge.
+  'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap'
 ];
 
 self.addEventListener('install', event => {

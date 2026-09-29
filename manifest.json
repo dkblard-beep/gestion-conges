@@ -3,8 +3,8 @@
   "short_name": "Congés",
   "start_url": ".",
   "display": "standalone",
-  "background_color": "#0f172a",
-  "theme_color": "#0f172a",
+  "background_color": "#0a0f1e",
+  "theme_color": "#0a0f1e",
   "description": "Application de gestion et suivi des congés payés, RTT et retraite.",
   "icons": [
     {

@@ -224,6 +224,18 @@
         .history-item:last-child { border-bottom: none; }
         .history-item:hover { background: rgba(255,255,255,0.03); }
 
+        /* FIX #7 – Styles migrated from inline JS to CSS classes */
+        .history-item__left { display: flex; align-items: center; gap: 1rem; }
+        .history-item__date { font-size: 0.875rem; font-weight: 600; color: #e2e8f0; }
+        .history-item__period { font-size: 0.7rem; color: #475569; margin-left: 0.5rem; }
+        .history-item__duration { font-size: 0.75rem; color: #64748b; margin-top: 0.1rem; }
+        .history-item__delete {
+            padding: 0.5rem; color: #475569;
+            background: none; border: none; cursor: pointer;
+            border-radius: 8px; transition: color 0.2s, background 0.2s;
+        }
+        .history-item__delete:hover { color: #f87171; background: rgba(239,68,68,0.08); }
+
         .badge {
             display: inline-flex;
             align-items: center;
@@ -234,6 +246,7 @@
             font-size: 0.65rem;
             font-weight: 800;
             letter-spacing: 0.05em;
+            flex-shrink: 0;
         }
         .badge.cp { background: rgba(99, 102, 241, 0.12); color: #818cf8; border: 1px solid rgba(99,102,241,0.2); }
         .badge.rtt { background: rgba(16, 185, 129, 0.12); color: #34d399; border: 1px solid rgba(16,185,129,0.2); }
@@ -312,6 +325,10 @@
 
         /* ─── Hidden toggle for retraite minimized ─── */
         #retraite-content-minimized.flex { display: flex !important; }
+
+        /* FIX #4 – Retraite icon toggle via CSS rotation instead of innerHTML */
+        .icon-chevron { transition: transform 0.25s ease; }
+        .icon-chevron.rotated { transform: rotate(180deg); }
     </style>
 </head>
 
@@ -569,7 +586,48 @@
     </div><!-- /wrapper -->
 
     <script>
+        // URL publique du script Google Apps (lecture/écriture via no-cors POST)
+        // Ce n'est pas une clé secrète : c'est un endpoint public intentionnel.
         const GOOGLE_SHEETS_URL = "https://script.google.com/macros/s/AKfycbxkp3pcNRAZ5ufwrMaaq4T8VS260l8YxtZd3qh8p3VhVGs_c2OHtnTfpotGiT1OCJjV7g/exec";
+
+        // FIX #6 – Cache des références DOM pour éviter les getElementById répétés
+        const DOM = {};
+        function initDOM() {
+            DOM.soldeCp        = document.getElementById('solde-cp');
+            DOM.soldeRtt       = document.getElementById('solde-rtt');
+            DOM.progressCp     = document.getElementById('progress-cp');
+            DOM.progressRtt    = document.getElementById('progress-rtt');
+            DOM.initCp         = document.getElementById('init-cp');
+            DOM.initRtt        = document.getElementById('init-rtt');
+            DOM.labelCpYear    = document.getElementById('label-cp-year');
+            DOM.labelCpYearNext= document.getElementById('label-cp-year-next');
+            DOM.labelRttYear   = document.getElementById('label-rtt-year');
+            DOM.retraiteLegal  = document.getElementById('init-retraite-legal');
+            DOM.retraiteAnticipe = document.getElementById('init-retraite-anticipe');
+            DOM.selectCp       = document.getElementById('select-cp-period');
+            DOM.selectRtt      = document.getElementById('select-rtt-period');
+            DOM.historiqueList  = document.getElementById('historique-list');
+            DOM.historiqueVide  = document.getElementById('historique-vide');
+            DOM.retraiteCard    = document.getElementById('retraite-card');
+            DOM.retraiteExpanded = document.getElementById('retraite-content-expanded');
+            DOM.retraiteMinimized = document.getElementById('retraite-content-minimized');
+            DOM.retraiteIcon    = document.getElementById('retraite-toggle-icon');
+            DOM.dateDebut       = document.getElementById('date-debut');
+            DOM.typeAbsence     = document.getElementById('type-absence');
+            DOM.dureeAbsence    = document.getElementById('duree-absence');
+            DOM.errorMessage    = document.getElementById('error-message');
+            DOM.errorText       = document.getElementById('error-text');
+            DOM.configSection   = document.getElementById('config-section');
+            DOM.formAbsence     = document.getElementById('form-absence');
+            DOM.anticipeContainer = document.getElementById('anticipe-container');
+            DOM.decompteLegal    = document.getElementById('decompte-legal');
+            DOM.decompteLegalDetail = document.getElementById('decompte-legal-detail');
+            DOM.dateLegalLabel  = document.getElementById('date-legal-label');
+            DOM.decompteAnticipe = document.getElementById('decompte-anticipe');
+            DOM.decompteAnticipeDetail = document.getElementById('decompte-anticipe-detail');
+            DOM.dateAnticipeLabel = document.getElementById('date-anticipe-label');
+            DOM.decompteMini    = document.getElementById('decompte-mini');
+        }
 
         let appData = { absences: [], configCP: {}, configRTT: {}, configRetraite: {} };
         let currentCPPeriod = "";
@@ -589,19 +647,32 @@
         }
 
         async function initApp() {
+            initDOM(); // FIX #6 – Initialise le cache DOM
+
             const today = new Date().toISOString().split('T')[0];
             currentCPPeriod = getCPPeriod(today);
             currentRTTPeriod = getRTTPeriod(today);
-            document.getElementById('date-debut').value = today;
+            DOM.dateDebut.value = today;
 
             try {
                 const response = await fetch(GOOGLE_SHEETS_URL, { method: 'GET', credentials: 'omit' });
                 if (!response.ok) throw new Error("Réseau");
                 const data = await response.json();
                 appData = migrateData(data);
-            } catch (e) {
-                const local = localStorage.getItem('conges_rtt_data_v2');
-                if (local) { appData = JSON.parse(local); showError("Mode hors-ligne."); }
+            } catch (networkError) {
+                // FIX #2 – JSON.parse dans son propre try/catch pour éviter un crash sur données corrompues
+                try {
+                    const local = localStorage.getItem('conges_rtt_data_v2');
+                    if (local) {
+                        appData = JSON.parse(local);
+                        showError("Mode hors-ligne.");
+                    }
+                } catch (parseError) {
+                    console.warn('Données localStorage corrompues, réinitialisation.', parseError);
+                    localStorage.removeItem('conges_rtt_data_v2');
+                    appData = { absences: [], configCP: {}, configRTT: {}, configRetraite: {} };
+                    showError("Données locales corrompues. Réinitialisation effectuée.");
+                }
             }
 
             updateSelectors();
@@ -624,89 +695,89 @@
         }
 
         async function sauvegarderDonneesCloud() {
+            // Sauvegarde locale synchrone (fiable)
             localStorage.setItem('conges_rtt_data_v2', JSON.stringify(appData));
-            try {
-                fetch(GOOGLE_SHEETS_URL, {
-                    method: "POST", mode: "no-cors", credentials: "omit",
-                    headers: { "Content-Type": "text/plain" },
-                    body: JSON.stringify(appData)
-                });
-            } catch (e) {}
+            // FIX #9 – Sauvegarde cloud en fire-and-forget intentionnel :
+            // mode no-cors = pas de lecture de réponse possible, on ignore le résultat.
+            fetch(GOOGLE_SHEETS_URL, {
+                method: "POST", mode: "no-cors", credentials: "omit",
+                headers: { "Content-Type": "text/plain" },
+                body: JSON.stringify(appData)
+            }).catch(e => console.debug('Sync cloud échouée (hors-ligne ?)', e));
         }
 
         function updateSelectors() {
+            // FIX #6 – Utilise le cache DOM
             let cpSet = new Set(Object.keys(appData.configCP));
             cpSet.add(currentCPPeriod);
             let cpArr = Array.from(cpSet).sort().reverse();
 
-            const selCP = document.getElementById('select-cp-period');
-            selCP.innerHTML = '';
+            DOM.selectCp.innerHTML = '';
             cpArr.forEach(y => {
                 const opt = document.createElement('option');
                 opt.value = y; opt.textContent = formatCPPeriod(y);
-                selCP.appendChild(opt);
+                DOM.selectCp.appendChild(opt);
             });
-            selCP.value = currentCPPeriod;
+            DOM.selectCp.value = currentCPPeriod;
 
             let rttSet = new Set(Object.keys(appData.configRTT));
             rttSet.add(currentRTTPeriod);
             let rttArr = Array.from(rttSet).sort().reverse();
 
-            const selRTT = document.getElementById('select-rtt-period');
-            selRTT.innerHTML = '';
+            DOM.selectRtt.innerHTML = '';
             rttArr.forEach(y => {
                 const opt = document.createElement('option');
                 opt.value = y; opt.textContent = y;
-                selRTT.appendChild(opt);
+                DOM.selectRtt.appendChild(opt);
             });
-            selRTT.value = currentRTTPeriod;
+            DOM.selectRtt.value = currentRTTPeriod;
         }
 
         window.changerPeriodeCP = function() {
-            currentCPPeriod = document.getElementById('select-cp-period').value;
+            currentCPPeriod = DOM.selectCp.value; // FIX #6
             mettreAJourAffichage();
         }
         window.changerPeriodeRTT = function() {
-            currentRTTPeriod = document.getElementById('select-rtt-period').value;
+            currentRTTPeriod = DOM.selectRtt.value; // FIX #6
             mettreAJourAffichage();
         }
 
-        window.mettreAJourAffichage = function() {
-            const initCP = appData.configCP[currentCPPeriod] || 0;
-            const prisCP = appData.absences
+        // FIX #5 – Découpage en calculerSoldes() + afficherSoldes() pour plus de clarté
+        function calculerSoldes() {
+            const initCP  = appData.configCP[currentCPPeriod] || 0;
+            const prisCP  = appData.absences
                 .filter(a => a.type === 'CP' && getCPPeriod(a.date) === currentCPPeriod)
                 .reduce((s, a) => s + a.duree, 0);
-            const resteCP = initCP - prisCP;
 
             const initRTT = appData.configRTT[currentRTTPeriod] || 0;
             const prisRTT = appData.absences
                 .filter(a => a.type === 'RTT' && getRTTPeriod(a.date) === currentRTTPeriod)
                 .reduce((s, a) => s + a.duree, 0);
-            const resteRTT = initRTT - prisRTT;
 
-            document.getElementById('solde-cp').textContent = resteCP % 1 === 0 ? resteCP : resteCP.toFixed(1);
-            document.getElementById('solde-rtt').textContent = resteRTT % 1 === 0 ? resteRTT : resteRTT.toFixed(1);
+            return { initCP, prisCP, resteCP: initCP - prisCP, initRTT, prisRTT, resteRTT: initRTT - prisRTT };
+        }
 
-            // Progress bars
-            if (initCP > 0) {
-                const pct = Math.max(0, Math.min(100, (resteCP / initCP) * 100));
-                document.getElementById('progress-cp').style.width = pct + '%';
-            }
-            if (initRTT > 0) {
-                const pct = Math.max(0, Math.min(100, (resteRTT / initRTT) * 100));
-                document.getElementById('progress-rtt').style.width = pct + '%';
-            }
+        function afficherSoldes({ initCP, resteCP, initRTT, resteRTT }) {
+            DOM.soldeCp.textContent  = resteCP  % 1 === 0 ? resteCP  : resteCP.toFixed(1);
+            DOM.soldeRtt.textContent = resteRTT % 1 === 0 ? resteRTT : resteRTT.toFixed(1);
 
-            document.getElementById('init-cp').value = initCP || '';
-            document.getElementById('init-rtt').value = initRTT || '';
-            document.getElementById('label-cp-year').textContent = currentCPPeriod;
-            document.getElementById('label-cp-year-next').textContent = parseInt(currentCPPeriod)+1;
-            document.getElementById('label-rtt-year').textContent = currentRTTPeriod;
+            if (initCP  > 0) DOM.progressCp.style.width  = Math.max(0, Math.min(100, (resteCP  / initCP)  * 100)) + '%';
+            if (initRTT > 0) DOM.progressRtt.style.width = Math.max(0, Math.min(100, (resteRTT / initRTT) * 100)) + '%';
+
+            DOM.initCp.value          = initCP  || '';
+            DOM.initRtt.value         = initRTT || '';
+            DOM.labelCpYear.textContent    = currentCPPeriod;
+            DOM.labelCpYearNext.textContent = parseInt(currentCPPeriod) + 1;
+            DOM.labelRttYear.textContent   = currentRTTPeriod;
 
             const r = appData.configRetraite || {};
-            document.getElementById('init-retraite-legal').value = r.legal || '';
-            document.getElementById('init-retraite-anticipe').value = r.anticipe || '';
+            DOM.retraiteLegal.value    = r.legal    || '';
+            DOM.retraiteAnticipe.value = r.anticipe || '';
+        }
 
+        window.mettreAJourAffichage = function() {
+            const soldes = calculerSoldes();
+            afficherSoldes(soldes);
             renderHistorique();
             updateRetraite();
         }
@@ -755,172 +826,182 @@
 
         function updateRetraite() {
             const r = appData.configRetraite || {};
-            const card = document.getElementById('retraite-card');
 
             if (!r.legal && !r.anticipe) {
-                card.classList.add('hidden');
+                DOM.retraiteCard.classList.add('hidden');
                 return;
             }
-            card.classList.remove('hidden');
+            DOM.retraiteCard.classList.remove('hidden');
 
             const today = new Date();
             today.setHours(0,0,0,0);
 
-            const expanded = document.getElementById('retraite-content-expanded');
-            const minimized = document.getElementById('retraite-content-minimized');
-            const icon = document.getElementById('retraite-toggle-icon');
-
             if (r.minimized) {
-                expanded.classList.add('hidden');
-                minimized.classList.remove('hidden');
-                minimized.classList.add('flex');
-                icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7-7-7 7"></path>';
+                DOM.retraiteExpanded.classList.add('hidden');
+                DOM.retraiteMinimized.classList.remove('hidden');
+                DOM.retraiteMinimized.classList.add('flex');
+                // FIX #4 – Toggle via classe CSS plutôt que innerHTML
+                DOM.retraiteIcon.classList.add('rotated');
 
                 const targetMini = r.anticipe ? new Date(r.anticipe) : new Date(r.legal);
-                document.getElementById('decompte-mini').textContent = formatDetailedCountdown(targetMini) + (r.anticipe ? ' (Anticipé)' : '');
+                DOM.decompteMini.textContent = formatDetailedCountdown(targetMini) + (r.anticipe ? ' (Anticipé)' : '');
             } else {
-                expanded.classList.remove('hidden');
-                minimized.classList.add('hidden');
-                minimized.classList.remove('flex');
-                icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path>';
+                DOM.retraiteExpanded.classList.remove('hidden');
+                DOM.retraiteMinimized.classList.add('hidden');
+                DOM.retraiteMinimized.classList.remove('flex');
+                DOM.retraiteIcon.classList.remove('rotated');
 
                 if (r.legal) {
-                    const target = new Date(r.legal);
-                    const diffTime = target - today;
-                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                    document.getElementById('decompte-legal').textContent = diffDays > 0 ? diffDays : "0";
-                    document.getElementById('decompte-legal-detail').textContent = formatDetailedCountdown(target);
-                    document.getElementById('date-legal-label').textContent = target.toLocaleDateString('fr-FR');
+                    const target   = new Date(r.legal);
+                    const diffDays = Math.ceil((target - today) / 86400000);
+                    DOM.decompteLegal.textContent       = diffDays > 0 ? diffDays : "0";
+                    DOM.decompteLegalDetail.textContent = formatDetailedCountdown(target);
+                    DOM.dateLegalLabel.textContent      = target.toLocaleDateString('fr-FR');
                 }
 
-                const cAnticipe = document.getElementById('anticipe-container');
                 if (r.anticipe) {
-                    cAnticipe.classList.remove('hidden');
-                    const target = new Date(r.anticipe);
-                    const diffTime = target - today;
-                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                    document.getElementById('decompte-anticipe').textContent = diffDays > 0 ? diffDays : "0";
-                    document.getElementById('decompte-anticipe-detail').textContent = formatDetailedCountdown(target);
-                    document.getElementById('date-anticipe-label').textContent = target.toLocaleDateString('fr-FR');
+                    DOM.anticipeContainer.classList.remove('hidden');
+                    const target   = new Date(r.anticipe);
+                    const diffDays = Math.ceil((target - today) / 86400000);
+                    DOM.decompteAnticipe.textContent       = diffDays > 0 ? diffDays : "0";
+                    DOM.decompteAnticipeDetail.textContent = formatDetailedCountdown(target);
+                    DOM.dateAnticipeLabel.textContent      = target.toLocaleDateString('fr-FR');
                 } else {
-                    cAnticipe.classList.add('hidden');
+                    DOM.anticipeContainer.classList.add('hidden');
                 }
             }
         }
 
         window.sauvegarderConfig = function() {
-            appData.configCP[currentCPPeriod] = parseFloat(document.getElementById('init-cp').value) || 0;
-            appData.configRTT[currentRTTPeriod] = parseFloat(document.getElementById('init-rtt').value) || 0;
+            // FIX #6 – Utilise le cache DOM
+            appData.configCP[currentCPPeriod]  = parseFloat(DOM.initCp.value)  || 0;
+            appData.configRTT[currentRTTPeriod] = parseFloat(DOM.initRtt.value) || 0;
 
             appData.configRetraite = appData.configRetraite || {};
-            appData.configRetraite.legal = document.getElementById('init-retraite-legal').value;
-            appData.configRetraite.anticipe = document.getElementById('init-retraite-anticipe').value;
+            appData.configRetraite.legal    = DOM.retraiteLegal.value;
+            appData.configRetraite.anticipe = DOM.retraiteAnticipe.value;
 
             sauvegarderDonneesCloud();
             mettreAJourAffichage();
             toggleConfig();
         }
 
+        // FIX #3 – Validation renforcée : whitelist du type, borne max de la durée
+        const TYPES_VALIDES = new Set(['CP', 'RTT']);
         window.ajouterAbsence = function() {
-            const type = document.getElementById('type-absence').value;
-            const date = document.getElementById('date-debut').value;
-            const duree = parseFloat(document.getElementById('duree-absence').value);
+            const type  = DOM.typeAbsence.value;
+            const date  = DOM.dateDebut.value;
+            const duree = parseFloat(DOM.dureeAbsence.value);
 
-            if (!date || isNaN(duree) || duree <= 0) return showError("Saisie invalide.");
+            if (!TYPES_VALIDES.has(type))             return showError("Type d'absence invalide.");
+            if (!date || isNaN(Date.parse(date)))     return showError("Date invalide.");
+            if (isNaN(duree) || duree <= 0)           return showError("Durée invalide.");
+            if (duree > 365)                          return showError("Durée maximale : 365 jours.");
 
             appData.absences.push({ id: Date.now(), type, date, duree });
             sauvegarderDonneesCloud();
             updateSelectors();
             mettreAJourAffichage();
-            document.getElementById('duree-absence').value = 1;
+            DOM.dureeAbsence.value = 1;
         }
 
         window.supprimerAbsence = function(id) {
-            appData.absences = appData.absences.filter(a => a.id !== id);
+            // Conversion explicite en nombre pour la comparaison (les IDs sont des timestamps)
+            appData.absences = appData.absences.filter(a => a.id !== Number(id));
             sauvegarderDonneesCloud();
             mettreAJourAffichage();
         }
 
+        // FIX #1 – XSS : remplacement de innerHTML par createElement + textContent
+        // FIX #7 – Styles inline migrés vers des classes CSS
         function renderHistorique() {
-            const tbody = document.getElementById('historique-list');
-            const empty = document.getElementById('historique-vide');
-            tbody.innerHTML = '';
+            DOM.historiqueList.innerHTML = '';
 
             if (appData.absences.length === 0) {
-                empty.classList.remove('hidden');
+                DOM.historiqueVide.classList.remove('hidden');
                 return;
             }
-            empty.classList.add('hidden');
+            DOM.historiqueVide.classList.add('hidden');
 
-            const tries = [...appData.absences].sort((a,b) => new Date(b.date) - new Date(a.date));
+            const tries = [...appData.absences].sort((a, b) => new Date(b.date) - new Date(a.date));
             tries.forEach(a => {
+                const badgeClass = TYPES_VALIDES.has(a.type) ? a.type.toLowerCase() : 'cp';
+                const periodTag  = a.type === 'CP' ? formatCPPeriod(getCPPeriod(a.date)) : getRTTPeriod(a.date);
+
+                // Conteneur principal
                 const item = document.createElement('div');
-                item.className = "history-item";
+                item.className = 'history-item';
 
-                const badgeClass = a.type === 'CP' ? 'cp' : 'rtt';
-                const periodTag = a.type === 'CP' ? formatCPPeriod(getCPPeriod(a.date)) : getRTTPeriod(a.date);
+                // Côté gauche
+                const left = document.createElement('div');
+                left.className = 'history-item__left';
 
-                item.innerHTML = `
-                    <div style="display:flex; align-items:center; gap:1rem;">
-                        <span class="badge ${badgeClass}">${a.type}</span>
-                        <div>
-                            <div style="font-size:0.875rem; font-weight:600; color:#e2e8f0;">
-                                ${new Date(a.date).toLocaleDateString('fr-FR')}
-                                <span style="font-size:0.7rem; color:#475569; margin-left:0.5rem;">${periodTag}</span>
-                            </div>
-                            <div style="font-size:0.75rem; color:#64748b; margin-top:0.1rem;">${a.duree} jour${a.duree > 1 ? 's' : ''}</div>
-                        </div>
-                    </div>
-                    <button onclick="supprimerAbsence(${a.id})"
-                        style="padding:0.5rem; color:#475569; background:none; border:none; cursor:pointer; border-radius:8px; transition:color 0.2s, background 0.2s;"
-                        onmouseover="this.style.color='#f87171'; this.style.background='rgba(239,68,68,0.08)'"
-                        onmouseout="this.style.color='#475569'; this.style.background='none'">
-                        <svg style="width:1.1rem; height:1.1rem;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                        </svg>
-                    </button>
-                `;
-                tbody.appendChild(item);
+                // Badge type
+                const badge = document.createElement('span');
+                badge.className = `badge ${badgeClass}`;
+                badge.textContent = a.type; // textContent = sûr contre XSS
+
+                // Bloc texte
+                const textBlock = document.createElement('div');
+
+                const dateLine = document.createElement('div');
+                dateLine.className = 'history-item__date';
+                dateLine.textContent = new Date(a.date).toLocaleDateString('fr-FR');
+
+                const periodSpan = document.createElement('span');
+                periodSpan.className = 'history-item__period';
+                periodSpan.textContent = periodTag; // textContent = sûr contre XSS
+                dateLine.appendChild(periodSpan);
+
+                const durationLine = document.createElement('div');
+                durationLine.className = 'history-item__duration';
+                durationLine.textContent = `${a.duree} jour${a.duree > 1 ? 's' : ''}`;
+
+                textBlock.appendChild(dateLine);
+                textBlock.appendChild(durationLine);
+                left.appendChild(badge);
+                left.appendChild(textBlock);
+
+                // Bouton suppression
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'history-item__delete';
+                deleteBtn.setAttribute('aria-label', `Supprimer l\'absence du ${new Date(a.date).toLocaleDateString('fr-FR')}`);
+                deleteBtn.innerHTML = `<svg style="width:1.1rem;height:1.1rem" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>`;
+                // L'ID est un timestamp numérique généré localement (pas une donnée utilisateur)
+                deleteBtn.addEventListener('click', () => window.supprimerAbsence(a.id));
+
+                item.appendChild(left);
+                item.appendChild(deleteBtn);
+                DOM.historiqueList.appendChild(item);
             });
         }
 
         window.toggleConfig = function() {
-            document.getElementById('config-section').classList.toggle('hidden');
+            DOM.configSection.classList.toggle('hidden'); // FIX #6
         }
 
         window.scrollToAbsence = function() {
-            const form = document.getElementById('form-absence');
-            form.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
-            form.style.boxShadow = '0 0 0 2px rgba(99,102,241,0.5), 0 20px 50px -10px rgba(0,0,0,0.5)';
-            setTimeout(() => {
-                form.style.boxShadow = '';
-            }, 1500);
-
-            setTimeout(() => {
-                document.getElementById('date-debut').focus();
-            }, 500);
+            DOM.formAbsence.scrollIntoView({ behavior: 'smooth', block: 'center' }); // FIX #6
+            DOM.formAbsence.style.boxShadow = '0 0 0 2px rgba(99,102,241,0.5), 0 20px 50px -10px rgba(0,0,0,0.5)';
+            setTimeout(() => { DOM.formAbsence.style.boxShadow = ''; }, 1500);
+            setTimeout(() => { DOM.dateDebut.focus(); }, 500);
         }
 
         function showError(msg) {
-            const err = document.getElementById('error-message');
-            document.getElementById('error-text').textContent = msg;
-            err.classList.remove('hidden');
-            setTimeout(() => err.classList.add('hidden'), 5000);
+            DOM.errorText.textContent = msg; // FIX #6
+            DOM.errorMessage.classList.remove('hidden');
+            setTimeout(() => DOM.errorMessage.classList.add('hidden'), 5000);
         }
 
-        window.onload = initApp;
+        // FIX #8 – Un seul écouteur DOMContentLoaded pour initApp (ordre déterministe)
+        // Le SW reste sur 'load' pour ne s'enregistrer qu'après le chargement complet.
+        document.addEventListener('DOMContentLoaded', initApp);
 
-        // Enregistrement du Service Worker
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('./sw.js')
-                    .then(registration => {
-                        console.log('ServiceWorker enregistré avec succès:', registration.scope);
-                    })
-                    .catch(error => {
-                        console.log('Échec de l\'enregistrement du ServiceWorker:', error);
-                    });
+                    .then(reg  => console.log('ServiceWorker enregistré:', reg.scope))
+                    .catch(err => console.warn('Échec ServiceWorker:', err));
             });
         }
     </script>
