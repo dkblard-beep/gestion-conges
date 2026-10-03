@@ -1,4 +1,4 @@
-const CACHE_NAME = 'conges-pwa-cache-v2'; // Incrémenter la version force la mise à jour du cache
+const CACHE_NAME = 'conges-pwa-cache-v9'; // Incrémenter la version force la mise à jour du cache
 const URLS_TO_CACHE = [
   './',
   './index.html',

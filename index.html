@@ -1,1009 +1,396 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="fr" class="bg-slate-50 text-slate-900">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#0a0f1e">
+    <meta name="theme-color" content="#f8fafc">
     <title>Suivi Congés & RTT</title>
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="icons/icon-192x192.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
     <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        * { box-sizing: border-box; }
-
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #0a0f1e;
-            color: #f1f5f9;
-            min-height: 100vh;
-            background-image:
-                radial-gradient(ellipse 80% 60% at 10% -10%, rgba(99, 102, 241, 0.18) 0%, transparent 60%),
-                radial-gradient(ellipse 60% 50% at 90% 110%, rgba(16, 185, 129, 0.13) 0%, transparent 55%),
-                radial-gradient(ellipse 40% 40% at 50% 50%, rgba(167, 139, 250, 0.05) 0%, transparent 70%);
-            background-attachment: fixed;
+    <script>
+        function toggleAbsenceModal(show) {
+            const modal = document.getElementById('form-absence');
+            if (show) {
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+            } else {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            }
         }
-
-        /* ─── Glassmorphism Card ─── */
-        .glass {
-            background: rgba(15, 23, 42, 0.55);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.07);
-            border-radius: 20px;
-            box-shadow:
-                0 4px 6px -1px rgba(0, 0, 0, 0.4),
-                0 20px 40px -8px rgba(0, 0, 0, 0.5),
-                inset 0 1px 0 rgba(255, 255, 255, 0.06);
-            transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        primary: '#2563EB',
+                        'primary-hover': '#1D4ED8',
+                        'primary-light': '#EFF6FF',
+                        'primary-container': '#DBEAFE',
+                        'on-primary-container': '#1E3A8A',
+                        secondary: '#10B981',
+                        'secondary-container': '#D1FAE5',
+                        'on-secondary-container': '#065F46',
+                        success: '#10B981',
+                        'success-light': '#ECFDF5',
+                        warning: '#F59E0B',
+                        'warning-light': '#FFFBEB',
+                        error: '#EF4444',
+                        'error-light': '#FEF2F2',
+                        'error-container': '#FEE2E2',
+                        'on-error-container': '#991B1B',
+                        surface: '#FFFFFF',
+                        'on-surface': '#0F172A',
+                        'surface-container-lowest': '#F8FAFC',
+                        'surface-container-low': '#F1F5F9',
+                        'surface-container': '#E2E8F0',
+                        'surface-container-high': '#CBD5E1',
+                        'on-surface-variant': '#64748B',
+                        'surface-bright': '#F8FAFC',
+                    }
+                }
+            }
         }
-        .glass:hover {
-            transform: translateY(-2px);
-            box-shadow:
-                0 8px 16px -2px rgba(0, 0, 0, 0.5),
-                0 30px 60px -10px rgba(0, 0, 0, 0.6),
-                inset 0 1px 0 rgba(255, 255, 255, 0.09);
-            border-color: rgba(255, 255, 255, 0.12);
+    </script>
+    <style type="text/tailwindcss">
+        /* Base styles & utilities */
+        .card {
+            @apply bg-white border border-slate-200 rounded-2xl shadow-sm p-6;
         }
-
-        /* ─── Stat Cards (CP / RTT) ─── */
-        .stat-card {
-            background: rgba(15, 23, 42, 0.7);
-            backdrop-filter: blur(24px);
-            -webkit-backdrop-filter: blur(24px);
-            border-radius: 24px;
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            box-shadow: 0 20px 50px -10px rgba(0, 0, 0, 0.5);
-            padding: 2rem;
-            position: relative;
-            overflow: hidden;
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        .input-field {
+            @apply w-full bg-white border border-slate-300 text-slate-900 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-shadow text-sm;
         }
-        .stat-card::before {
-            content: '';
-            position: absolute;
-            top: 0; left: 0; right: 0;
-            height: 3px;
-            border-radius: 24px 24px 0 0;
+        .label {
+            @apply block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2;
         }
-        .stat-card.cp::before { background: linear-gradient(90deg, #6366f1, #818cf8); }
-        .stat-card.rtt::before { background: linear-gradient(90deg, #10b981, #34d399); }
-        .stat-card:hover { transform: translateY(-3px); box-shadow: 0 30px 60px -10px rgba(0,0,0,0.6); }
-
-        /* ─── Big Number ─── */
-        .big-number {
-            font-size: clamp(3.5rem, 8vw, 5.5rem);
-            font-weight: 900;
-            line-height: 1;
-            letter-spacing: -0.04em;
-        }
-
-        /* ─── Progress Bar ─── */
-        .progress-track {
-            height: 6px;
-            background: rgba(255,255,255,0.07);
-            border-radius: 99px;
-            overflow: hidden;
-            margin-top: 1rem;
-        }
-        .progress-fill {
-            height: 100%;
-            border-radius: 99px;
-            transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        .progress-fill.cp { background: linear-gradient(90deg, #6366f1, #a5b4fc); }
-        .progress-fill.rtt { background: linear-gradient(90deg, #10b981, #6ee7b7); }
-
-        /* ─── Input Style ─── */
-        .modern-input {
-            background: rgba(255, 255, 255, 0.04);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 12px;
-            color: #f1f5f9;
-            padding: 0.75rem 1rem;
-            width: 100%;
-            font-size: 0.9rem;
-            font-family: 'Inter', sans-serif;
-            transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
-            outline: none;
-        }
-        .modern-input:focus {
-            border-color: rgba(99, 102, 241, 0.6);
-            background: rgba(99, 102, 241, 0.06);
-            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
-        }
-        .modern-input::-webkit-calendar-picker-indicator { filter: invert(0.7); cursor: pointer; }
-        select.modern-input option { background: #0f172a; }
-
-        /* ─── Label Style ─── */
-        .modern-label {
-            display: block;
-            font-size: 0.7rem;
-            font-weight: 700;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            color: #64748b;
-            margin-bottom: 0.5rem;
-        }
-
-        /* ─── Primary Button ─── */
         .btn-primary {
-            background: linear-gradient(135deg, #6366f1 0%, #818cf8 100%);
-            color: white;
-            font-weight: 700;
-            font-size: 0.875rem;
-            padding: 0.75rem 1.5rem;
-            border-radius: 12px;
-            border: none;
-            cursor: pointer;
-            display: flex; align-items: center; gap: 0.5rem; justify-content: center;
-            transition: all 0.2s ease;
-            box-shadow: 0 4px 20px rgba(99, 102, 241, 0.35);
-            position: relative;
-            overflow: hidden;
+            @apply bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl px-5 py-2.5 transition-colors flex items-center justify-center gap-2 shadow-sm;
         }
-        .btn-primary::before {
-            content: '';
-            position: absolute;
-            top: 0; left: -100%;
-            width: 100%; height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
-            transition: left 0.4s ease;
+        .btn-secondary {
+            @apply bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-medium rounded-xl px-5 py-2.5 transition-colors flex items-center justify-center gap-2 shadow-sm;
         }
-        .btn-primary:hover::before { left: 100%; }
-        .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 8px 28px rgba(99, 102, 241, 0.5); }
-        .btn-primary:active { transform: translateY(0); }
-
-        /* ─── Ghost Button ─── */
         .btn-ghost {
-            background: rgba(255, 255, 255, 0.05);
-            color: #94a3b8;
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 12px;
-            padding: 0.75rem;
-            cursor: pointer;
-            transition: all 0.2s;
+            @apply text-slate-500 hover:text-slate-900 hover:bg-slate-100 p-2 rounded-lg transition-colors;
         }
-        .btn-ghost:hover {
-            background: rgba(255, 255, 255, 0.09);
-            color: #f1f5f9;
-            border-color: rgba(255, 255, 255, 0.15);
-        }
-
-        /* ─── Save Button ─── */
-        .btn-save {
-            background: rgba(255, 255, 255, 0.07);
-            color: #94a3b8;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 12px;
-            padding: 0.65rem 1.5rem;
-            font-weight: 600;
-            font-size: 0.875rem;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .btn-save:hover {
-            background: rgba(255, 255, 255, 0.12);
-            color: #f1f5f9;
-        }
-
-        /* ─── Period Select (small) ─── */
-        .period-select {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 8px;
-            color: #94a3b8;
-            font-size: 0.7rem;
-            font-weight: 600;
-            padding: 0.3rem 0.6rem;
-            cursor: pointer;
-            outline: none;
-            transition: border-color 0.2s;
-        }
-        .period-select:focus { border-color: rgba(99, 102, 241, 0.4); }
-        .period-select option { background: #0f172a; }
-
-        /* ─── Section Divider ─── */
-        .section-divider {
-            height: 1px;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent);
-            margin: 1.5rem 0;
-        }
-
-        /* ─── History Item ─── */
-        .history-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 1rem 1.25rem;
-            border-bottom: 1px solid rgba(255,255,255,0.04);
-            transition: background 0.2s;
-        }
-        .history-item:last-child { border-bottom: none; }
-        .history-item:hover { background: rgba(255,255,255,0.03); }
-
-        /* FIX #7 – Styles migrated from inline JS to CSS classes */
-        .history-item__left { display: flex; align-items: center; gap: 1rem; }
-        .history-item__date { font-size: 0.875rem; font-weight: 600; color: #e2e8f0; }
-        .history-item__period { font-size: 0.7rem; color: #475569; margin-left: 0.5rem; }
-        .history-item__duration { font-size: 0.75rem; color: #64748b; margin-top: 0.1rem; }
-        .history-item__delete {
-            padding: 0.5rem; color: #475569;
-            background: none; border: none; cursor: pointer;
-            border-radius: 8px; transition: color 0.2s, background 0.2s;
-        }
-        .history-item__delete:hover { color: #f87171; background: rgba(239,68,68,0.08); }
-
         .badge {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: 48px;
-            height: 28px;
-            border-radius: 8px;
-            font-size: 0.65rem;
-            font-weight: 800;
-            letter-spacing: 0.05em;
-            flex-shrink: 0;
+            @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
         }
-        .badge.cp { background: rgba(99, 102, 241, 0.12); color: #818cf8; border: 1px solid rgba(99,102,241,0.2); }
-        .badge.rtt { background: rgba(16, 185, 129, 0.12); color: #34d399; border: 1px solid rgba(16,185,129,0.2); }
-
-        /* ─── Config panel slide ─── */
-        #config-section {
-            animation-duration: 0.3s;
-            animation-fill-mode: both;
+        
+        /* Smooth transitions */
+        .fade-enter {
+            opacity: 0;
+            transform: translateY(10px);
+            transition: all 0.3s ease-out;
         }
-        #config-section:not(.hidden) { animation-name: slideDown; }
-        @keyframes slideDown {
-            from { opacity: 0; transform: translateY(-12px); }
-            to   { opacity: 1; transform: translateY(0); }
+        .fade-enter-active {
+            opacity: 1;
+            transform: translateY(0);
         }
 
-        /* ─── Retraite Card special ─── */
-        .retraite-card {
-            background: linear-gradient(135deg, rgba(109, 40, 217, 0.12) 0%, rgba(15, 23, 42, 0.7) 50%, rgba(219, 39, 119, 0.08) 100%);
-            border: 1px solid rgba(167, 139, 250, 0.15);
+        /* Material symbols specific adjustments */
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
         }
-        .retraite-card::before {
-            content: '';
-            position: absolute;
-            top: 0; left: 0; right: 0;
-            height: 3px;
-            background: linear-gradient(90deg, #7c3aed, #a78bfa, #ec4899);
-            border-radius: 24px 24px 0 0;
-        }
-
-        /* ─── Countdown ring ─── */
-        .countdown-value {
-            font-size: clamp(1.6rem, 4vw, 2.5rem);
-            font-weight: 900;
-            letter-spacing: -0.03em;
-        }
-
-        /* ─── Error/Success toast ─── */
-        .toast {
-            border-radius: 14px;
-            padding: 0.875rem 1.25rem;
-            font-size: 0.85rem;
-            font-weight: 500;
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-        }
-        .toast.error {
-            background: rgba(239, 68, 68, 0.1);
-            border: 1px solid rgba(239, 68, 68, 0.25);
-            color: #fca5a5;
-        }
-
-        /* ─── Scrollbar ─── */
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 99px; }
-        ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
-
-        /* ─── Online indicator ─── */
-        .status-dot {
-            width: 8px; height: 8px;
-            border-radius: 50%;
-            background: #10b981;
-            box-shadow: 0 0 8px rgba(16,185,129,0.6);
-            animation: pulse-dot 2s infinite;
-        }
-        @keyframes pulse-dot {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50%       { opacity: 0.6; transform: scale(0.85); }
-        }
-
-        /* ─── Responsive ─── */
-        @media (max-width: 640px) {
-            .stat-card { padding: 1.5rem; }
-        }
-
-        /* ─── Hidden toggle for retraite minimized ─── */
-        #retraite-content-minimized.flex { display: flex !important; }
-
-        /* FIX #4 – Retraite icon toggle via CSS rotation instead of innerHTML */
-        .icon-chevron { transition: transform 0.25s ease; }
-        .icon-chevron.rotated { transform: rotate(180deg); }
     </style>
 </head>
+<body class="antialiased min-h-screen flex flex-col md:flex-row">
 
-<body class="antialiased">
-
-    <!-- ──────────────── LAYOUT WRAPPER ──────────────── -->
-    <div class="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-6">
-
-        <!-- ══════════════ HEADER ══════════════ -->
-        <header class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-2 pb-2">
-            <div>
-                <div class="flex items-center gap-3 mb-1">
-                    <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/30">
-                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                        </svg>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <div class="status-dot"></div>
-                        <span class="text-xs font-medium text-emerald-400">Synchronisé</span>
-                    </div>
-                </div>
-                <h1 class="text-3xl sm:text-4xl font-black tracking-tight">
-                    <span class="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400">
-                        Suivi Congés
-                    </span>
-                    <span class="text-slate-300 font-light"> & RTT</span>
-                </h1>
-                <p class="text-slate-500 text-sm font-medium mt-1">Gérez votre temps libre, en toute clarté</p>
+    <!-- ──────────────── SIDEBAR / NAVIGATION ──────────────── -->
+    <nav class="bg-white border-r border-slate-200 w-full md:w-64 md:min-h-screen flex flex-col p-4 md:sticky md:top-0 h-auto md:h-screen z-10 shrink-0">
+        <div class="flex items-center gap-3 px-2 py-4 mb-6">
+            <div class="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shrink-0">
+                <span class="material-symbols-outlined text-white text-[18px]">calendar_month</span>
             </div>
+            <div>
+                <h1 class="font-bold text-slate-900 leading-tight">Suivi Congés</h1>
+                <div class="flex items-center gap-1.5 mt-0.5">
+                    <span class="w-1.5 h-1.5 rounded-full bg-success"></span>
+                    <span class="text-[10px] font-medium text-slate-500 uppercase tracking-wider">Synchronisé</span>
+                </div>
+            </div>
+        </div>
 
+        <div class="flex md:flex-col gap-1 overflow-x-auto md:overflow-visible pb-2 md:pb-0">
+            <button onclick="showTab('dashboard')" id="nav-dashboard" class="flex items-center gap-3 px-4 py-3 rounded-xl bg-primary-light text-primary font-medium transition-colors text-left text-sm whitespace-nowrap md:whitespace-normal w-full">
+                <span class="material-symbols-outlined text-[20px]">dashboard</span>
+                Vue d'ensemble
+            </button>
+            <button onclick="showTab('calendar')" id="nav-calendar" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-colors text-left text-sm whitespace-nowrap md:whitespace-normal w-full">
+                <span class="material-symbols-outlined text-[20px]">event_note</span>
+                Calendrier
+            </button>
+        </div>
+
+        <div class="mt-auto hidden md:block border-t border-slate-200 pt-4">
+            <button onclick="toggleConfig()" class="flex items-center gap-3 px-4 py-3 w-full rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-colors text-left text-sm">
+                <span class="material-symbols-outlined text-[20px]">settings</span>
+                Paramètres
+            </button>
+        </div>
+    </nav>
+
+    <!-- ──────────────── MAIN CONTENT ──────────────── -->
+    <main class="flex-1 w-full max-w-6xl mx-auto p-4 md:p-8 overflow-y-auto">
+        
+        <!-- Header Actions (Mobile config & CTA) -->
+        <header class="flex justify-between items-center mb-4">
+            <h2 class="text-2xl font-bold text-slate-900">Bonjour 👋</h2>
             <div class="flex items-center gap-3">
-                <button onclick="scrollToAbsence()"
-                    class="btn-primary flex-1 sm:flex-none">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/>
-                    </svg>
-                    Déclarer
+                <button onclick="toggleConfig()" class="md:hidden btn-ghost">
+                    <span class="material-symbols-outlined">settings</span>
                 </button>
-                <button onclick="toggleConfig()" class="btn-ghost" title="Paramètres">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
-                            d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                    </svg>
+                <button onclick="toggleAbsenceModal(true)" class="btn-primary">
+                    <span class="material-symbols-outlined text-[18px]">add</span>
+                    <span class="hidden sm:inline">Déclarer</span>
                 </button>
             </div>
         </header>
 
-        <!-- ══════════════ CONFIG PANEL ══════════════ -->
-        <div id="config-section" class="glass p-6 sm:p-8 hidden">
+        <!-- RETRAITE DISCRET -->
+        <div id="retraite-card" class="mb-8 hidden">
+            <div class="inline-flex items-center gap-3 bg-purple-50/50 border border-purple-100 rounded-xl px-4 py-2 shadow-sm cursor-pointer hover:bg-purple-50 transition-colors" onclick="toggleRetraiteSize()">
+                <span class="material-symbols-outlined text-purple-500 text-[18px]">celebration</span>
+                <div class="flex items-baseline gap-2">
+                    <span class="text-sm font-medium text-slate-600">Retraite dans :</span>
+                    <span class="text-sm font-bold text-purple-700" id="decompte-mini">--</span>
+                </div>
+                <span id="retraite-toggle-icon" class="material-symbols-outlined text-purple-400 text-[18px] ml-2 transition-transform duration-200">expand_more</span>
+            </div>
+            
+            <!-- Expanded Details -->
+            <div id="retraite-content-expanded" class="hidden mt-3 p-4 bg-white border border-slate-200 rounded-xl shadow-sm max-w-xl">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <div class="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Départ Légal</div>
+                        <div class="text-lg font-bold text-slate-900" id="decompte-legal-detail">--</div>
+                        <div class="text-xs text-slate-500 mt-0.5">Soit <span id="decompte-legal" class="font-medium text-slate-700">--</span> jours (<span id="date-legal-label">--</span>)</div>
+                    </div>
+                    <div id="anticipe-container" class="hidden sm:border-l sm:border-slate-100 sm:pl-4">
+                        <div class="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Départ Anticipé</div>
+                        <div class="text-lg font-bold text-slate-900" id="decompte-anticipe-detail">--</div>
+                        <div class="text-xs text-slate-500 mt-0.5">Soit <span id="decompte-anticipe" class="font-medium text-slate-700">--</span> jours (<span id="date-anticipe-label">--</span>)</div>
+                    </div>
+                </div>
+            </div>
+            <!-- Dummy element to prevent JS errors when toggling -->
+            <div id="retraite-content-minimized" class="hidden"></div>
+        </div>
+
+        <!-- ══════════════ CONFIGURATION PANEL (Slide down) ══════════════ -->
+        <div id="config-section" class="card mb-8 hidden border-primary border-opacity-30 bg-primary-light bg-opacity-20">
             <div class="flex items-center justify-between mb-6">
-                <h3 class="text-lg font-bold text-slate-100">Configuration des soldes</h3>
-                <button onclick="toggleConfig()" class="text-slate-500 hover:text-slate-300 transition-colors">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                    </svg>
+                <h3 class="text-base font-bold text-slate-900">Configuration des compteurs</h3>
+                <button onclick="toggleConfig()" class="btn-ghost !p-1">
+                    <span class="material-symbols-outlined">close</span>
                 </button>
             </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <div>
-                    <label class="modern-label">Période CP (Juin <span id="label-cp-year"></span> - Mai <span id="label-cp-year-next"></span>)</label>
-                    <input type="number" id="init-cp" step="0.5" class="modern-input" placeholder="Ex : 25">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Soldes Initiaux -->
+                <div class="space-y-4">
+                    <h4 class="text-sm font-semibold text-slate-700">Soldes Annuels</h4>
+                    <div>
+                        <label class="label">CP (Juin <span id="label-cp-year"></span> - Mai <span id="label-cp-year-next"></span>)</label>
+                        <input type="number" id="init-cp" step="0.5" class="input-field" placeholder="Ex : 25">
+                    </div>
+                    <div>
+                        <label class="label">RTT (<span id="label-rtt-year"></span>)</label>
+                        <input type="number" id="init-rtt" step="0.5" class="input-field" placeholder="Ex : 10">
+                    </div>
                 </div>
-                <div>
-                    <label class="modern-label">Année RTT (<span id="label-rtt-year"></span>)</label>
-                    <input type="number" id="init-rtt" step="0.5" class="modern-input" placeholder="Ex : 10">
+
+                <!-- Retraite -->
+                <div class="space-y-4">
+                    <h4 class="text-sm font-semibold text-slate-700">Départ à la retraite</h4>
+                    <div>
+                        <label class="label">Date légale</label>
+                        <input type="date" id="init-retraite-legal" class="input-field">
+                    </div>
+                    <div>
+                        <label class="label">Date anticipée (optionnel)</label>
+                        <input type="date" id="init-retraite-anticipe" class="input-field">
+                    </div>
                 </div>
             </div>
 
-            <div class="section-divider mt-6"></div>
-
-            <p class="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-4">Départ à la retraite</p>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <div>
-                    <label class="modern-label">Date légale</label>
-                    <input type="date" id="init-retraite-legal" class="modern-input" style="color-scheme: dark;">
-                </div>
-                <div>
-                    <label class="modern-label">Date anticipée (optionnel)</label>
-                    <input type="date" id="init-retraite-anticipe" class="modern-input" style="color-scheme: dark;">
-                </div>
-            </div>
-
-            <div class="flex justify-end mt-6">
-                <button onclick="sauvegarderConfig()" class="btn-save">Enregistrer</button>
+            <div class="flex justify-end mt-6 pt-6 border-t border-slate-200">
+                <button onclick="sauvegarderConfig()" class="btn-primary">Enregistrer les paramètres</button>
             </div>
         </div>
 
-        <!-- ══════════════ STAT CARDS ══════════════ -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
-
-            <!-- CP Card -->
-            <div class="stat-card cp">
-                <div class="flex items-start justify-between mb-4">
-                    <div>
-                        <span class="text-xs font-bold text-indigo-400 uppercase tracking-widest">Congés Payés</span>
-                    </div>
-                    <select id="select-cp-period" onchange="changerPeriodeCP()" class="period-select"></select>
-                </div>
-
-                <div class="flex items-end gap-3">
-                    <div class="big-number text-transparent bg-clip-text bg-gradient-to-br from-indigo-300 to-indigo-500" id="solde-cp">0</div>
-                    <span class="text-slate-500 text-sm font-medium mb-3">jours restants</span>
-                </div>
-
-                <div class="progress-track">
-                    <div class="progress-fill cp" id="progress-cp" style="width: 0%"></div>
-                </div>
-            </div>
-
-            <!-- RTT Card -->
-            <div class="stat-card rtt">
-                <div class="flex items-start justify-between mb-4">
-                    <div>
-                        <span class="text-xs font-bold text-emerald-400 uppercase tracking-widest">RTT</span>
-                    </div>
-                    <select id="select-rtt-period" onchange="changerPeriodeRTT()" class="period-select"></select>
-                </div>
-
-                <div class="flex items-end gap-3">
-                    <div class="big-number text-transparent bg-clip-text bg-gradient-to-br from-emerald-300 to-emerald-500" id="solde-rtt">0</div>
-                    <span class="text-slate-500 text-sm font-medium mb-3">jours restants</span>
-                </div>
-
-                <div class="progress-track">
-                    <div class="progress-fill rtt" id="progress-rtt" style="width: 0%"></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ══════════════ RETRAITE CARD ══════════════ -->
-        <div id="retraite-card" class="stat-card retraite-card hidden" style="padding: 1.75rem;">
-
-            <!-- Toggle button -->
-            <div class="absolute top-4 right-4 z-20">
-                <button onclick="toggleRetraiteSize()" class="btn-ghost" title="Masquer/Afficher" style="padding: 0.4rem;">
-                    <svg id="retraite-toggle-icon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
-                    </svg>
-                </button>
-            </div>
-
-            <!-- Expanded view -->
-            <div id="retraite-content-expanded" class="flex flex-col sm:flex-row justify-between items-start gap-6 relative z-10 transition-all duration-300">
-                <div class="flex-1 min-w-0">
-                    <div class="flex items-center gap-2 mb-3">
-                        <div class="w-7 h-7 rounded-lg bg-purple-500/15 flex items-center justify-center">
-                            <svg class="w-3.5 h-3.5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                            </svg>
+        <!-- ══════════════ TAB: DASHBOARD ══════════════ -->
+        <div id="tab-dashboard" class="space-y-8 block">
+            
+            <!-- STATS CARDS -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                <!-- CP Card -->
+                <div class="card relative overflow-hidden group">
+                    <div class="absolute top-0 left-0 w-1 h-full bg-primary rounded-l-2xl"></div>
+                    <div class="flex justify-between items-start mb-6">
+                        <div class="flex items-center gap-2">
+                            <span class="material-symbols-outlined text-primary bg-primary-light p-1.5 rounded-lg text-[20px]">flight_takeoff</span>
+                            <span class="font-semibold text-slate-900">Congés Payés</span>
                         </div>
-                        <span class="text-xs font-bold text-purple-400 uppercase tracking-widest">Départ légal</span>
+                        <select id="select-cp-period" onchange="changerPeriodeCP()" class="text-sm bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-slate-600 focus:outline-none focus:border-primary cursor-pointer"></select>
                     </div>
-                    <div class="countdown-value text-transparent bg-clip-text bg-gradient-to-br from-purple-300 to-indigo-400" id="decompte-legal-detail">--</div>
-                    <p class="text-xs text-slate-500 mt-2">Soit <span class="text-slate-300 font-semibold" id="decompte-legal">--</span> jours — le <span class="text-slate-300" id="date-legal-label">--</span></p>
+
+                    <div class="flex items-end gap-4 mb-6">
+                        <div class="text-5xl font-bold text-slate-900 tracking-tight" id="solde-cp">0</div>
+                        <div class="text-sm font-medium text-slate-500 pb-1">jours<br>restants</div>
+                    </div>
+
+                    <!-- Progress Details -->
+                    <div class="space-y-2">
+                        <div class="flex justify-between text-xs text-slate-500 font-medium">
+                            <span>Pris: <span id="pris-cp" class="text-slate-700">0</span></span>
+                            <span>Total: <span id="total-cp" class="text-slate-700">0</span></span>
+                        </div>
+                        <div class="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                            <div class="h-full bg-primary rounded-full transition-all duration-700 ease-out" id="progress-cp" style="width: 0%"></div>
+                        </div>
+                    </div>
                 </div>
 
-                <div class="hidden sm:block w-px self-stretch bg-gradient-to-b from-transparent via-slate-700/50 to-transparent"></div>
-
-                <div id="anticipe-container" class="flex-1 min-w-0 hidden">
-                    <div class="flex items-center gap-2 mb-3">
-                        <div class="w-7 h-7 rounded-lg bg-pink-500/15 flex items-center justify-center">
-                            <svg class="w-3.5 h-3.5 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
-                            </svg>
+                <!-- RTT Card -->
+                <div class="card relative overflow-hidden group">
+                    <div class="absolute top-0 left-0 w-1 h-full bg-success rounded-l-2xl"></div>
+                    <div class="flex justify-between items-start mb-6">
+                        <div class="flex items-center gap-2">
+                            <span class="material-symbols-outlined text-success bg-success-light p-1.5 rounded-lg text-[20px]">self_improvement</span>
+                            <span class="font-semibold text-slate-900">RTT</span>
                         </div>
-                        <span class="text-xs font-bold text-pink-400 uppercase tracking-widest">Départ anticipé</span>
+                        <select id="select-rtt-period" onchange="changerPeriodeRTT()" class="text-sm bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-slate-600 focus:outline-none focus:border-success cursor-pointer"></select>
                     </div>
-                    <div class="countdown-value text-transparent bg-clip-text bg-gradient-to-br from-pink-300 to-rose-400" id="decompte-anticipe-detail">--</div>
-                    <p class="text-xs text-slate-500 mt-2">Soit <span class="text-slate-300 font-semibold" id="decompte-anticipe">--</span> jours — le <span class="text-slate-300" id="date-anticipe-label">--</span></p>
+
+                    <div class="flex items-end gap-4 mb-6">
+                        <div class="text-5xl font-bold text-slate-900 tracking-tight" id="solde-rtt">0</div>
+                        <div class="text-sm font-medium text-slate-500 pb-1">jours<br>restants</div>
+                    </div>
+
+                    <!-- Progress Details -->
+                    <div class="space-y-2">
+                        <div class="flex justify-between text-xs text-slate-500 font-medium">
+                            <span>Pris: <span id="pris-rtt" class="text-slate-700">0</span></span>
+                            <span>Total: <span id="total-rtt" class="text-slate-700">0</span></span>
+                        </div>
+                        <div class="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                            <div class="h-full bg-success rounded-full transition-all duration-700 ease-out" id="progress-rtt" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+
+
+            <!-- HISTORY -->
+            <div class="card flex flex-col h-[500px]">
+                <div class="flex items-center justify-between mb-4 shrink-0">
+                    <h3 class="font-bold text-slate-900 flex items-center gap-2">
+                        <span class="material-symbols-outlined text-slate-400">history</span>
+                        Historique des demandes
+                    </h3>
+                </div>
+
+                <div class="flex-1 overflow-y-auto pr-2 -mr-2">
+                    <div id="historique-list" class="space-y-3">
+                        <!-- Items injectés via JS -->
+                    </div>
+
+                    <!-- Empty State -->
+                    <div id="historique-vide" class="hidden flex-col items-center justify-center h-full text-slate-400 space-y-3">
+                        <span class="material-symbols-outlined text-5xl opacity-50">inbox</span>
+                        <p class="text-sm font-medium">Aucune absence enregistrée.</p>
+                    </div>
                 </div>
             </div>
 
-            <!-- Minimized view -->
-            <div id="retraite-content-minimized" class="hidden items-center justify-between relative z-10">
-                <div class="flex items-center gap-3">
-                    <div class="w-8 h-8 rounded-xl bg-purple-500/15 flex items-center justify-center">
-                        <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                        </svg>
-                    </div>
-                    <div>
-                        <div class="text-xs font-bold text-slate-500 uppercase tracking-widest">Retraite</div>
-                        <div class="text-sm font-bold text-slate-200 mt-0.5" id="decompte-mini">--</div>
-                    </div>
+        </div>
+
+        <!-- ══════════════ TAB: CALENDAR ══════════════ -->
+        <div id="tab-calendar" class="hidden card flex-col h-[700px]">
+            <div class="flex items-center justify-between mb-6 shrink-0">
+                <h3 class="font-bold text-slate-900 text-lg flex items-center gap-2">
+                    <span class="material-symbols-outlined text-primary">calendar_month</span>
+                    Planning Annuel
+                </h3>
+                <div class="flex items-center gap-4">
+                    <button onclick="changeMonth(-1)" class="btn-ghost bg-slate-50 border border-slate-200">
+                        <span class="material-symbols-outlined">chevron_left</span>
+                    </button>
+                    <span id="calendar-month-label-display" class="font-semibold text-slate-700 min-w-[120px] text-center capitalize">--</span>
+                    <button onclick="changeMonth(1)" class="btn-ghost bg-slate-50 border border-slate-200">
+                        <span class="material-symbols-outlined">chevron_right</span>
+                    </button>
                 </div>
+            </div>
+
+            <!-- Légende -->
+            <div class="flex gap-4 mb-4 text-xs font-medium text-slate-500 shrink-0 border-b border-slate-100 pb-4">
+                <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-primary"></span> CP</div>
+                <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-success"></span> RTT</div>
+                <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded bg-error-light border border-error/20"></span> Férié</div>
+            </div>
+
+            <div class="grid grid-cols-7 gap-1 text-center text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 shrink-0">
+                <div>Lun</div><div>Mar</div><div>Mer</div><div>Jeu</div><div>Ven</div><div>Sam</div><div>Dim</div>
+            </div>
+            
+            <div id="calendar-grid-display" class="grid grid-cols-7 gap-1 flex-1 overflow-y-auto content-start">
+                <!-- JS injonctions -->
             </div>
         </div>
 
-        <!-- ══════════════ DECLARE FORM ══════════════ -->
-        <div id="form-absence" class="glass p-6 sm:p-8 relative">
-            <!-- Accent top bar -->
-            <div class="absolute top-0 left-0 right-0 h-0.5 rounded-t-[20px] bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500"></div>
+    </main>
 
-            <h3 class="text-lg font-bold text-slate-100 mb-6">Déclarer une absence</h3>
-
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+    <!-- ABSENCE MODAL -->
+    <div id="form-absence" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden items-center justify-center p-4 transition-opacity">
+        <div class="card w-full max-w-md bg-white border border-slate-200 shadow-2xl relative">
+            <button onclick="toggleAbsenceModal(false)" class="absolute top-4 right-4 btn-ghost !p-1 text-slate-400 hover:text-slate-900">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+            <h3 class="text-xl font-bold text-slate-900 mb-6 flex items-center gap-2">
+                <span class="material-symbols-outlined text-primary">add_circle</span>
+                Nouvelle Absence
+            </h3>
+            
+            <div class="space-y-5">
                 <div>
-                    <label class="modern-label">Type</label>
-                    <select id="type-absence" class="modern-input">
+                    <label class="label">Type de congé</label>
+                    <select id="type-absence" class="input-field">
                         <option value="CP">Congé Payé (CP)</option>
                         <option value="RTT">RTT</option>
                     </select>
                 </div>
                 <div>
-                    <label class="modern-label">Date</label>
-                    <input type="date" id="date-debut" class="modern-input" style="color-scheme: dark;">
+                    <label class="label">Date de début</label>
+                    <input type="date" id="date-debut" class="input-field">
                 </div>
                 <div>
-                    <label class="modern-label">Durée (jours)</label>
-                    <input type="number" id="duree-absence" step="0.5" min="0.5" value="1" class="modern-input">
+                    <label class="label">Durée (jours)</label>
+                    <input type="number" id="duree-absence" step="0.5" min="0.5" value="1" class="input-field">
                 </div>
-                <button onclick="ajouterAbsence()" class="btn-primary w-full">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/>
-                    </svg>
-                    Ajouter
-                </button>
+                <div class="pt-4">
+                    <button onclick="ajouterAbsence(); toggleAbsenceModal(false);" class="btn-primary w-full">Enregistrer</button>
+                </div>
             </div>
 
-            <div id="error-message" class="hidden mt-4 toast error">
-                <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
+            <!-- Toast Error -->
+            <div id="error-message" class="hidden mt-4 bg-error-light border border-error/20 text-error px-4 py-3 rounded-xl flex items-center gap-2 text-sm font-medium">
+                <span class="material-symbols-outlined text-[18px]">error</span>
                 <span id="error-text"></span>
             </div>
         </div>
+    </div>
 
-        <!-- ══════════════ HISTORY ══════════════ -->
-        <div class="glass p-6 sm:p-8">
-            <div class="flex items-center justify-between mb-6">
-                <h3 class="text-lg font-bold text-slate-100">Historique</h3>
-            </div>
-
-            <div class="rounded-xl overflow-hidden border border-white/5 bg-white/[0.02]">
-                <div id="historique-list"></div>
-                <div id="historique-vide" class="text-center py-12 hidden">
-                    <div class="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center mx-auto mb-3">
-                        <svg class="w-6 h-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
-                        </svg>
-                    </div>
-                    <p class="text-slate-500 text-sm font-medium">Aucune absence enregistrée</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- Footer -->
-        <footer class="text-center pb-6">
-            <p class="text-slate-700 text-xs">Suivi Congés & RTT · Données synchronisées</p>
-        </footer>
-
-    </div><!-- /wrapper -->
-
-    <script>
-        // URL publique du script Google Apps (lecture/écriture via no-cors POST)
-        // Ce n'est pas une clé secrète : c'est un endpoint public intentionnel.
-        const GOOGLE_SHEETS_URL = "https://script.google.com/macros/s/AKfycbxkp3pcNRAZ5ufwrMaaq4T8VS260l8YxtZd3qh8p3VhVGs_c2OHtnTfpotGiT1OCJjV7g/exec";
-
-        // FIX #6 – Cache des références DOM pour éviter les getElementById répétés
-        const DOM = {};
-        function initDOM() {
-            DOM.soldeCp        = document.getElementById('solde-cp');
-            DOM.soldeRtt       = document.getElementById('solde-rtt');
-            DOM.progressCp     = document.getElementById('progress-cp');
-            DOM.progressRtt    = document.getElementById('progress-rtt');
-            DOM.initCp         = document.getElementById('init-cp');
-            DOM.initRtt        = document.getElementById('init-rtt');
-            DOM.labelCpYear    = document.getElementById('label-cp-year');
-            DOM.labelCpYearNext= document.getElementById('label-cp-year-next');
-            DOM.labelRttYear   = document.getElementById('label-rtt-year');
-            DOM.retraiteLegal  = document.getElementById('init-retraite-legal');
-            DOM.retraiteAnticipe = document.getElementById('init-retraite-anticipe');
-            DOM.selectCp       = document.getElementById('select-cp-period');
-            DOM.selectRtt      = document.getElementById('select-rtt-period');
-            DOM.historiqueList  = document.getElementById('historique-list');
-            DOM.historiqueVide  = document.getElementById('historique-vide');
-            DOM.retraiteCard    = document.getElementById('retraite-card');
-            DOM.retraiteExpanded = document.getElementById('retraite-content-expanded');
-            DOM.retraiteMinimized = document.getElementById('retraite-content-minimized');
-            DOM.retraiteIcon    = document.getElementById('retraite-toggle-icon');
-            DOM.dateDebut       = document.getElementById('date-debut');
-            DOM.typeAbsence     = document.getElementById('type-absence');
-            DOM.dureeAbsence    = document.getElementById('duree-absence');
-            DOM.errorMessage    = document.getElementById('error-message');
-            DOM.errorText       = document.getElementById('error-text');
-            DOM.configSection   = document.getElementById('config-section');
-            DOM.formAbsence     = document.getElementById('form-absence');
-            DOM.anticipeContainer = document.getElementById('anticipe-container');
-            DOM.decompteLegal    = document.getElementById('decompte-legal');
-            DOM.decompteLegalDetail = document.getElementById('decompte-legal-detail');
-            DOM.dateLegalLabel  = document.getElementById('date-legal-label');
-            DOM.decompteAnticipe = document.getElementById('decompte-anticipe');
-            DOM.decompteAnticipeDetail = document.getElementById('decompte-anticipe-detail');
-            DOM.dateAnticipeLabel = document.getElementById('date-anticipe-label');
-            DOM.decompteMini    = document.getElementById('decompte-mini');
-        }
-
-        let appData = { absences: [], configCP: {}, configRTT: {}, configRetraite: {} };
-        let currentCPPeriod = "";
-        let currentRTTPeriod = "";
-
-        // Utilitaires de dates
-        function getCPPeriod(dateStr) {
-            const d = new Date(dateStr);
-            const y = d.getFullYear();
-            return (d.getMonth() < 5) ? (y - 1).toString() : y.toString();
-        }
-        function getRTTPeriod(dateStr) {
-            return new Date(dateStr).getFullYear().toString();
-        }
-        function formatCPPeriod(year) {
-            return `Juin ${year} - Mai ${parseInt(year)+1}`;
-        }
-
-        async function initApp() {
-            initDOM(); // FIX #6 – Initialise le cache DOM
-
-            const today = new Date().toISOString().split('T')[0];
-            currentCPPeriod = getCPPeriod(today);
-            currentRTTPeriod = getRTTPeriod(today);
-            DOM.dateDebut.value = today;
-
-            try {
-                const response = await fetch(GOOGLE_SHEETS_URL, { method: 'GET', credentials: 'omit' });
-                if (!response.ok) throw new Error("Réseau");
-                const data = await response.json();
-                appData = migrateData(data);
-            } catch (networkError) {
-                // FIX #2 – JSON.parse dans son propre try/catch pour éviter un crash sur données corrompues
-                try {
-                    const local = localStorage.getItem('conges_rtt_data_v2');
-                    if (local) {
-                        appData = JSON.parse(local);
-                        showError("Mode hors-ligne.");
-                    }
-                } catch (parseError) {
-                    console.warn('Données localStorage corrompues, réinitialisation.', parseError);
-                    localStorage.removeItem('conges_rtt_data_v2');
-                    appData = { absences: [], configCP: {}, configRTT: {}, configRetraite: {} };
-                    showError("Données locales corrompues. Réinitialisation effectuée.");
-                }
-            }
-
-            updateSelectors();
-            mettreAJourAffichage();
-        }
-
-        function migrateData(data) {
-            if (!data) return { absences: [], configCP: {}, configRTT: {}, configRetraite: {} };
-            if (data.years && !data.migrated_v2) {
-                let newData = { absences: [], configCP: {}, configRTT: {}, configRetraite: {}, migrated_v2: true };
-                for (let y in data.years) {
-                    newData.configCP[y] = data.years[y].soldeInitialCP || 0;
-                    newData.configRTT[y] = data.years[y].soldeInitialRTT || 0;
-                    if (data.years[y].absences) newData.absences.push(...data.years[y].absences);
-                }
-                return newData;
-            }
-            if (!data.configRetraite) data.configRetraite = {};
-            return data;
-        }
-
-        async function sauvegarderDonneesCloud() {
-            // Sauvegarde locale synchrone (fiable)
-            localStorage.setItem('conges_rtt_data_v2', JSON.stringify(appData));
-            // FIX #9 – Sauvegarde cloud en fire-and-forget intentionnel :
-            // mode no-cors = pas de lecture de réponse possible, on ignore le résultat.
-            fetch(GOOGLE_SHEETS_URL, {
-                method: "POST", mode: "no-cors", credentials: "omit",
-                headers: { "Content-Type": "text/plain" },
-                body: JSON.stringify(appData)
-            }).catch(e => console.debug('Sync cloud échouée (hors-ligne ?)', e));
-        }
-
-        function updateSelectors() {
-            // FIX #6 – Utilise le cache DOM
-            let cpSet = new Set(Object.keys(appData.configCP));
-            cpSet.add(currentCPPeriod);
-            let cpArr = Array.from(cpSet).sort().reverse();
-
-            DOM.selectCp.innerHTML = '';
-            cpArr.forEach(y => {
-                const opt = document.createElement('option');
-                opt.value = y; opt.textContent = formatCPPeriod(y);
-                DOM.selectCp.appendChild(opt);
-            });
-            DOM.selectCp.value = currentCPPeriod;
-
-            let rttSet = new Set(Object.keys(appData.configRTT));
-            rttSet.add(currentRTTPeriod);
-            let rttArr = Array.from(rttSet).sort().reverse();
-
-            DOM.selectRtt.innerHTML = '';
-            rttArr.forEach(y => {
-                const opt = document.createElement('option');
-                opt.value = y; opt.textContent = y;
-                DOM.selectRtt.appendChild(opt);
-            });
-            DOM.selectRtt.value = currentRTTPeriod;
-        }
-
-        window.changerPeriodeCP = function() {
-            currentCPPeriod = DOM.selectCp.value; // FIX #6
-            mettreAJourAffichage();
-        }
-        window.changerPeriodeRTT = function() {
-            currentRTTPeriod = DOM.selectRtt.value; // FIX #6
-            mettreAJourAffichage();
-        }
-
-        // FIX #5 – Découpage en calculerSoldes() + afficherSoldes() pour plus de clarté
-        function calculerSoldes() {
-            const initCP  = appData.configCP[currentCPPeriod] || 0;
-            const prisCP  = appData.absences
-                .filter(a => a.type === 'CP' && getCPPeriod(a.date) === currentCPPeriod)
-                .reduce((s, a) => s + a.duree, 0);
-
-            const initRTT = appData.configRTT[currentRTTPeriod] || 0;
-            const prisRTT = appData.absences
-                .filter(a => a.type === 'RTT' && getRTTPeriod(a.date) === currentRTTPeriod)
-                .reduce((s, a) => s + a.duree, 0);
-
-            return { initCP, prisCP, resteCP: initCP - prisCP, initRTT, prisRTT, resteRTT: initRTT - prisRTT };
-        }
-
-        function afficherSoldes({ initCP, resteCP, initRTT, resteRTT }) {
-            DOM.soldeCp.textContent  = resteCP  % 1 === 0 ? resteCP  : resteCP.toFixed(1);
-            DOM.soldeRtt.textContent = resteRTT % 1 === 0 ? resteRTT : resteRTT.toFixed(1);
-
-            if (initCP  > 0) DOM.progressCp.style.width  = Math.max(0, Math.min(100, (resteCP  / initCP)  * 100)) + '%';
-            if (initRTT > 0) DOM.progressRtt.style.width = Math.max(0, Math.min(100, (resteRTT / initRTT) * 100)) + '%';
-
-            DOM.initCp.value          = initCP  || '';
-            DOM.initRtt.value         = initRTT || '';
-            DOM.labelCpYear.textContent    = currentCPPeriod;
-            DOM.labelCpYearNext.textContent = parseInt(currentCPPeriod) + 1;
-            DOM.labelRttYear.textContent   = currentRTTPeriod;
-
-            const r = appData.configRetraite || {};
-            DOM.retraiteLegal.value    = r.legal    || '';
-            DOM.retraiteAnticipe.value = r.anticipe || '';
-        }
-
-        window.mettreAJourAffichage = function() {
-            const soldes = calculerSoldes();
-            afficherSoldes(soldes);
-            renderHistorique();
-            updateRetraite();
-        }
-
-        function getDetailedCountdown(targetDate) {
-            let d1 = new Date();
-            d1.setHours(0,0,0,0);
-            let d2 = new Date(targetDate);
-            d2.setHours(0,0,0,0);
-
-            if (d1 >= d2) return { over: true };
-
-            let years = d2.getFullYear() - d1.getFullYear();
-            let months = d2.getMonth() - d1.getMonth();
-            let days = d2.getDate() - d1.getDate();
-
-            if (days < 0) {
-                months--;
-                let prevMonth = new Date(d2.getFullYear(), d2.getMonth(), 0).getDate();
-                days += prevMonth;
-            }
-            if (months < 0) {
-                years--;
-                months += 12;
-            }
-
-            return { over: false, years, months, days };
-        }
-
-        function formatDetailedCountdown(targetDate) {
-            const cd = getDetailedCountdown(targetDate);
-            if (cd.over) return "C'est l'heure !";
-            let parts = [];
-            if (cd.years > 0) parts.push(`${cd.years} an${cd.years > 1 ? 's' : ''}`);
-            if (cd.months > 0) parts.push(`${cd.months} mois`);
-            if (cd.days > 0) parts.push(`${cd.days} jour${cd.days > 1 ? 's' : ''}`);
-            return parts.join(', ') || "Aujourd'hui !";
-        }
-
-        window.toggleRetraiteSize = function() {
-            appData.configRetraite = appData.configRetraite || {};
-            appData.configRetraite.minimized = !appData.configRetraite.minimized;
-            sauvegarderDonneesCloud();
-            updateRetraite();
-        }
-
-        function updateRetraite() {
-            const r = appData.configRetraite || {};
-
-            if (!r.legal && !r.anticipe) {
-                DOM.retraiteCard.classList.add('hidden');
-                return;
-            }
-            DOM.retraiteCard.classList.remove('hidden');
-
-            const today = new Date();
-            today.setHours(0,0,0,0);
-
-            if (r.minimized) {
-                DOM.retraiteExpanded.classList.add('hidden');
-                DOM.retraiteMinimized.classList.remove('hidden');
-                DOM.retraiteMinimized.classList.add('flex');
-                // FIX #4 – Toggle via classe CSS plutôt que innerHTML
-                DOM.retraiteIcon.classList.add('rotated');
-
-                const targetMini = r.anticipe ? new Date(r.anticipe) : new Date(r.legal);
-                DOM.decompteMini.textContent = formatDetailedCountdown(targetMini) + (r.anticipe ? ' (Anticipé)' : '');
-            } else {
-                DOM.retraiteExpanded.classList.remove('hidden');
-                DOM.retraiteMinimized.classList.add('hidden');
-                DOM.retraiteMinimized.classList.remove('flex');
-                DOM.retraiteIcon.classList.remove('rotated');
-
-                if (r.legal) {
-                    const target   = new Date(r.legal);
-                    const diffDays = Math.ceil((target - today) / 86400000);
-                    DOM.decompteLegal.textContent       = diffDays > 0 ? diffDays : "0";
-                    DOM.decompteLegalDetail.textContent = formatDetailedCountdown(target);
-                    DOM.dateLegalLabel.textContent      = target.toLocaleDateString('fr-FR');
-                }
-
-                if (r.anticipe) {
-                    DOM.anticipeContainer.classList.remove('hidden');
-                    const target   = new Date(r.anticipe);
-                    const diffDays = Math.ceil((target - today) / 86400000);
-                    DOM.decompteAnticipe.textContent       = diffDays > 0 ? diffDays : "0";
-                    DOM.decompteAnticipeDetail.textContent = formatDetailedCountdown(target);
-                    DOM.dateAnticipeLabel.textContent      = target.toLocaleDateString('fr-FR');
-                } else {
-                    DOM.anticipeContainer.classList.add('hidden');
-                }
-            }
-        }
-
-        window.sauvegarderConfig = function() {
-            // FIX #6 – Utilise le cache DOM
-            appData.configCP[currentCPPeriod]  = parseFloat(DOM.initCp.value)  || 0;
-            appData.configRTT[currentRTTPeriod] = parseFloat(DOM.initRtt.value) || 0;
-
-            appData.configRetraite = appData.configRetraite || {};
-            appData.configRetraite.legal    = DOM.retraiteLegal.value;
-            appData.configRetraite.anticipe = DOM.retraiteAnticipe.value;
-
-            sauvegarderDonneesCloud();
-            mettreAJourAffichage();
-            toggleConfig();
-        }
-
-        // FIX #3 – Validation renforcée : whitelist du type, borne max de la durée
-        const TYPES_VALIDES = new Set(['CP', 'RTT']);
-        window.ajouterAbsence = function() {
-            const type  = DOM.typeAbsence.value;
-            const date  = DOM.dateDebut.value;
-            const duree = parseFloat(DOM.dureeAbsence.value);
-
-            if (!TYPES_VALIDES.has(type))             return showError("Type d'absence invalide.");
-            if (!date || isNaN(Date.parse(date)))     return showError("Date invalide.");
-            if (isNaN(duree) || duree <= 0)           return showError("Durée invalide.");
-            if (duree > 365)                          return showError("Durée maximale : 365 jours.");
-
-            appData.absences.push({ id: Date.now(), type, date, duree });
-            sauvegarderDonneesCloud();
-            updateSelectors();
-            mettreAJourAffichage();
-            DOM.dureeAbsence.value = 1;
-        }
-
-        window.supprimerAbsence = function(id) {
-            // Conversion explicite en nombre pour la comparaison (les IDs sont des timestamps)
-            appData.absences = appData.absences.filter(a => a.id !== Number(id));
-            sauvegarderDonneesCloud();
-            mettreAJourAffichage();
-        }
-
-        // FIX #1 – XSS : remplacement de innerHTML par createElement + textContent
-        // FIX #7 – Styles inline migrés vers des classes CSS
-        function renderHistorique() {
-            DOM.historiqueList.innerHTML = '';
-
-            if (appData.absences.length === 0) {
-                DOM.historiqueVide.classList.remove('hidden');
-                return;
-            }
-            DOM.historiqueVide.classList.add('hidden');
-
-            const tries = [...appData.absences].sort((a, b) => new Date(b.date) - new Date(a.date));
-            tries.forEach(a => {
-                const badgeClass = TYPES_VALIDES.has(a.type) ? a.type.toLowerCase() : 'cp';
-                const periodTag  = a.type === 'CP' ? formatCPPeriod(getCPPeriod(a.date)) : getRTTPeriod(a.date);
-
-                // Conteneur principal
-                const item = document.createElement('div');
-                item.className = 'history-item';
-
-                // Côté gauche
-                const left = document.createElement('div');
-                left.className = 'history-item__left';
-
-                // Badge type
-                const badge = document.createElement('span');
-                badge.className = `badge ${badgeClass}`;
-                badge.textContent = a.type; // textContent = sûr contre XSS
-
-                // Bloc texte
-                const textBlock = document.createElement('div');
-
-                const dateLine = document.createElement('div');
-                dateLine.className = 'history-item__date';
-                dateLine.textContent = new Date(a.date).toLocaleDateString('fr-FR');
-
-                const periodSpan = document.createElement('span');
-                periodSpan.className = 'history-item__period';
-                periodSpan.textContent = periodTag; // textContent = sûr contre XSS
-                dateLine.appendChild(periodSpan);
-
-                const durationLine = document.createElement('div');
-                durationLine.className = 'history-item__duration';
-                durationLine.textContent = `${a.duree} jour${a.duree > 1 ? 's' : ''}`;
-
-                textBlock.appendChild(dateLine);
-                textBlock.appendChild(durationLine);
-                left.appendChild(badge);
-                left.appendChild(textBlock);
-
-                // Bouton suppression
-                const deleteBtn = document.createElement('button');
-                deleteBtn.className = 'history-item__delete';
-                deleteBtn.setAttribute('aria-label', `Supprimer l\'absence du ${new Date(a.date).toLocaleDateString('fr-FR')}`);
-                deleteBtn.innerHTML = `<svg style="width:1.1rem;height:1.1rem" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>`;
-                // L'ID est un timestamp numérique généré localement (pas une donnée utilisateur)
-                deleteBtn.addEventListener('click', () => window.supprimerAbsence(a.id));
-
-                item.appendChild(left);
-                item.appendChild(deleteBtn);
-                DOM.historiqueList.appendChild(item);
-            });
-        }
-
-        window.toggleConfig = function() {
-            DOM.configSection.classList.toggle('hidden'); // FIX #6
-        }
-
-        window.scrollToAbsence = function() {
-            DOM.formAbsence.scrollIntoView({ behavior: 'smooth', block: 'center' }); // FIX #6
-            DOM.formAbsence.style.boxShadow = '0 0 0 2px rgba(99,102,241,0.5), 0 20px 50px -10px rgba(0,0,0,0.5)';
-            setTimeout(() => { DOM.formAbsence.style.boxShadow = ''; }, 1500);
-            setTimeout(() => { DOM.dateDebut.focus(); }, 500);
-        }
-
-        function showError(msg) {
-            DOM.errorText.textContent = msg; // FIX #6
-            DOM.errorMessage.classList.remove('hidden');
-            setTimeout(() => DOM.errorMessage.classList.add('hidden'), 5000);
-        }
-
-        // FIX #8 – Un seul écouteur DOMContentLoaded pour initApp (ordre déterministe)
-        // Le SW reste sur 'load' pour ne s'enregistrer qu'après le chargement complet.
-        document.addEventListener('DOMContentLoaded', initApp);
-
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js')
-                    .then(reg  => console.log('ServiceWorker enregistré:', reg.scope))
-                    .catch(err => console.warn('Échec ServiceWorker:', err));
-            });
-        }
-    </script>
+    <script src="app.js"></script>
 </body>
 </html>
