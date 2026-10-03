@@ -199,8 +199,8 @@
             if (DOM.progressTextCp) DOM.progressTextCp.textContent = pctCp + '%';
             if (DOM.progressTextRtt) DOM.progressTextRtt.textContent = pctRtt + '%';
 
-            if (DOM.progressCp) DOM.progressCp.setAttribute('stroke-dasharray', `${pctCp}, 100`);
-            if (DOM.progressRtt) DOM.progressRtt.setAttribute('stroke-dasharray', `${pctRtt}, 100`);
+            if (DOM.progressCp) DOM.progressCp.style.width = `${pctCp}%`;
+            if (DOM.progressRtt) DOM.progressRtt.style.width = `${pctRtt}%`;
 
             DOM.initCp.value          = initCP  || '';
             DOM.initRtt.value         = initRTT || '';
