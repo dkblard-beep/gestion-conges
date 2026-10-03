@@ -12,7 +12,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="style.css">
     <script>
         function toggleAbsenceModal(show) {
             const modal = document.getElementById('form-absence');
@@ -24,82 +24,7 @@
                 modal.classList.remove('flex');
             }
         }
-        tailwind.config = {
-            theme: {
-                extend: {
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                    },
-                    colors: {
-                        primary: '#2563EB',
-                        'primary-hover': '#1D4ED8',
-                        'primary-light': '#EFF6FF',
-                        'primary-container': '#DBEAFE',
-                        'on-primary-container': '#1E3A8A',
-                        secondary: '#10B981',
-                        'secondary-container': '#D1FAE5',
-                        'on-secondary-container': '#065F46',
-                        success: '#10B981',
-                        'success-light': '#ECFDF5',
-                        warning: '#F59E0B',
-                        'warning-light': '#FFFBEB',
-                        error: '#EF4444',
-                        'error-light': '#FEF2F2',
-                        'error-container': '#FEE2E2',
-                        'on-error-container': '#991B1B',
-                        surface: '#FFFFFF',
-                        'on-surface': '#0F172A',
-                        'surface-container-lowest': '#F8FAFC',
-                        'surface-container-low': '#F1F5F9',
-                        'surface-container': '#E2E8F0',
-                        'surface-container-high': '#CBD5E1',
-                        'on-surface-variant': '#64748B',
-                        'surface-bright': '#F8FAFC',
-                    }
-                }
-            }
-        }
     </script>
-    <style type="text/tailwindcss">
-        /* Base styles & utilities */
-        .card {
-            @apply bg-white border border-slate-200 rounded-2xl shadow-sm p-6;
-        }
-        .input-field {
-            @apply w-full bg-white border border-slate-300 text-slate-900 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-shadow text-sm;
-        }
-        .label {
-            @apply block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2;
-        }
-        .btn-primary {
-            @apply bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl px-5 py-2.5 transition-colors flex items-center justify-center gap-2 shadow-sm;
-        }
-        .btn-secondary {
-            @apply bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-medium rounded-xl px-5 py-2.5 transition-colors flex items-center justify-center gap-2 shadow-sm;
-        }
-        .btn-ghost {
-            @apply text-slate-500 hover:text-slate-900 hover:bg-slate-100 p-2 rounded-lg transition-colors;
-        }
-        .badge {
-            @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
-        }
-        
-        /* Smooth transitions */
-        .fade-enter {
-            opacity: 0;
-            transform: translateY(10px);
-            transition: all 0.3s ease-out;
-        }
-        .fade-enter-active {
-            opacity: 1;
-            transform: translateY(0);
-        }
-
-        /* Material symbols specific adjustments */
-        .material-symbols-outlined {
-            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-        }
-    </style>
 </head>
 <body class="antialiased min-h-screen flex flex-col md:flex-row">
 
