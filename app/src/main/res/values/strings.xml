@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Suivi Congés</string>
+    <string name="greeting">Bonjour 👋</string>
+    <string name="nav_dashboard">Vue d\'ensemble</string>
+    <string name="nav_calendar">Calendrier</string>
+    <string name="nav_settings">Paramètres</string>
+    <string name="declare_absence">Déclarer</string>
+    <string name="cp_title">Congés Payés</string>
+    <string name="rtt_title">RTT</string>
+    <string name="days_remaining">jours restants</string>
+    <string name="taken">Pris: %s</string>
+    <string name="total">Total: %s</string>
+    <string name="retraite_title">Retraite dans :</string>
+    <string name="retraite_legal">Départ Légal</string>
+    <string name="retraite_anticipe">Départ Anticipé</string>
+    <string name="history_title">Historique des absences</string>
+    <string name="no_absences">Aucune absence enregistrée</string>
+    <string name="add_absence_title">Déclarer une absence</string>
+    <string name="type_cp">CP</string>
+    <string name="type_rtt">RTT</string>
+    <string name="start_date">Date de début</string>
+    <string name="duration_label">Durée (en jours)</string>
+    <string name="save">Enregistrer</string>
+    <string name="cancel">Annuler</string>
+    <string name="delete">Supprimer</string>
+    <string name="sync_status">Synchronisé</string>
+    <string name="sync_button">Synchroniser</string>
+</resources>
