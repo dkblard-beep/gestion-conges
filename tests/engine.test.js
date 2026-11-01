@@ -309,3 +309,124 @@ test('Lot A (config.js) : recordBackupSnapshot applique le plafond de 5, maximum
     assert.equal(res.history[0].label, 'Action critique 5', 'La sauvegarde la plus récente est en tête');
 });
 
+test('Lot B (engine.js) : calculerAlertesExpiration au 2026-11-01 (seuil 60j) affiche RTT (6j, échéance 2026-12-31) et masque CP (14j, échéance 2027-05-31)', () => {
+    const referenceData = {
+        absences: [
+            { id: 1790412079086, type: 'CP', date: '2026-10-05', duree: 5 },
+            { id: 1790412095516, type: 'CP', date: '2026-08-03', duree: 10 },
+            { id: 1790970282472, type: 'RTT', date: '2026-09-25', duree: 1 },
+            { id: 1791001510220, type: 'RTT', date: '2026-07-13', duree: 1 },
+            { id: 1791001615916, type: 'RTT', date: '2026-05-15', duree: 1 },
+            { id: 1791001638651, type: 'RTT', date: '2026-05-25', duree: 1 },
+            { id: 1793543141050, type: 'RTT', date: '2026-11-12', duree: 2 }
+        ],
+        configCP: { '2026': 29 },
+        configRTT: { '2026': 12 }
+    };
+
+    // 1. Au 2026-11-01 avec seuil de 60 jours :
+    // - RTT 2026 : reste 6j, échéance 2026-12-31 (60 jours calendaires restants <= 60) -> ACTIVE
+    // - CP 2026  : reste 14j, échéance 2027-05-31 (211 jours calendaires restants > 60) -> INACTIVE
+    const resNov = AppEngine.calculerAlertesExpiration(referenceData, '2026-11-01', {
+        seuilAlerteJours: 60,
+        echeanceReportCP: '05-31',
+        lundiPentecoteTravaille: true
+    });
+
+    assert.equal(resNov.rtt.active, true, 'L’alerte RTT (6j, échéance 2026-12-31) doit s’afficher au 2026-11-01');
+    assert.equal(resNov.rtt.reste, 6);
+    assert.equal(resNov.rtt.deadline, '2026-12-31');
+    assert.equal(resNov.rtt.joursCalendairesRestants, 60);
+    assert.equal(resNov.rtt.joursOuvresRestants, 42, '42 jours ouvrés entre le 01/11/2026 et le 31/12/2026 (hors mer 11/11 et ven 25/12)');
+
+    assert.equal(resNov.cp.active, false, 'L’alerte CP (14j, échéance 2027-05-31) ne doit PAS s’afficher au 2026-11-01');
+    assert.equal(resNov.cp.reste, 14);
+    assert.equal(resNov.cp.deadline, '2027-05-31');
+    assert.equal(resNov.cp.joursCalendairesRestants, 211);
+    assert.equal(resNov.alerts.length, 1);
+    assert.equal(resNov.alerts[0].type, 'RTT');
+
+    // 2. Le jour même de l'échéance RTT (2026-12-31) : alerte active, 0 jour calendaire restant, 1 jour ouvré (le jeudi 31/12 lui-même)
+    const resSameDayRtt = AppEngine.calculerAlertesExpiration(referenceData, '2026-12-31', {
+        seuilAlerteJours: 60,
+        cpPeriod: '2026',
+        rttPeriod: '2026'
+    });
+    assert.equal(resSameDayRtt.rtt.active, true, 'Le jour même de l’échéance (2026-12-31), l’alerte RTT reste active');
+    assert.equal(resSameDayRtt.rtt.joursCalendairesRestants, 0);
+    assert.equal(resSameDayRtt.rtt.joursOuvresRestants, 1);
+
+    // 3. Le lendemain de l'échéance RTT (2027-01-01 sur période RTT 2026) : aucune alerte, aucun nombre négatif
+    const resAfterRtt = AppEngine.calculerAlertesExpiration(referenceData, '2027-01-01', {
+        seuilAlerteJours: 60,
+        cpPeriod: '2026',
+        rttPeriod: '2026'
+    });
+    assert.equal(resAfterRtt.rtt.active, false, 'Le lendemain de l’échéance, aucune alerte RTT');
+    assert.equal(resAfterRtt.rtt.joursCalendairesRestants, 0, 'Aucun nombre calendaire négatif');
+    assert.equal(resAfterRtt.rtt.joursOuvresRestants, 0, 'Aucun nombre de jours ouvrés négatif');
+
+    // 4. Le jour même de l'échéance CP (2027-05-31) et le lendemain (2027-06-01 sur période CP 2026)
+    const resSameDayCp = AppEngine.calculerAlertesExpiration(referenceData, '2027-05-31', {
+        seuilAlerteJours: 60,
+        cpPeriod: '2026',
+        rttPeriod: '2027'
+    });
+    assert.equal(resSameDayCp.cp.active, true, 'Le jour même de l’échéance CP (2027-05-31), l’alerte CP est active');
+    assert.equal(resSameDayCp.cp.joursCalendairesRestants, 0);
+    assert.equal(resSameDayCp.cp.joursOuvresRestants, 1);
+
+    const resAfterCp = AppEngine.calculerAlertesExpiration(referenceData, '2027-06-01', {
+        seuilAlerteJours: 60,
+        cpPeriod: '2026',
+        rttPeriod: '2027'
+    });
+    assert.equal(resAfterCp.cp.active, false, 'Le lendemain de l’échéance CP, aucune alerte');
+    assert.equal(resAfterCp.cp.joursCalendairesRestants, 0, 'Aucun nombre négatif');
+    assert.equal(resAfterCp.cp.joursOuvresRestants, 0, 'Aucun nombre négatif');
+});
+
+test('Lot B (engine.js) : compterJoursOuvresEntre exclut week-ends et fériés et respecte lundiPentecoteTravaille', () => {
+    // Semaine du lundi 25/05/2026 (Pentecôte) au dimanche 31/05/2026 :
+    // - Avec lundiPentecoteTravaille: true (défaut) -> 5 jours ouvrés (lun 25 au ven 29)
+    // - Avec lundiPentecoteTravaille: false -> 4 jours ouvrés (mar 26 au ven 29)
+    const workedCount = AppEngine.compterJoursOuvresEntre('2026-05-25', '2026-05-31', {
+        lundiPentecoteTravaille: true
+    });
+    const holidayCount = AppEngine.compterJoursOuvresEntre('2026-05-25', '2026-05-31', {
+        lundiPentecoteTravaille: false
+    });
+
+    assert.equal(workedCount, 5, 'Lundi de Pentecôte travaillé compte comme jour ouvré');
+    assert.equal(holidayCount, 4, 'Lundi de Pentecôte férié est exclu des jours ouvrés restants');
+    assert.equal(AppEngine.compterJoursOuvresEntre('2026-06-10', '2026-06-01'), 0, 'Retourne 0 si startDate > endDate');
+});
+
+test('Lot B (engine.js) : filtrerAbsencesHistorique est en lecture seule et réinitialise la période si elle disparaît', () => {
+    const originalAbsences = [
+        { id: 1, type: 'CP', date: '2026-10-05', duree: 5 },
+        { id: 2, type: 'RTT', date: '2026-09-25', duree: 1 },
+        { id: 3, type: 'CP', date: '2025-07-10', duree: 2 }
+    ];
+    const snapshotBefore = JSON.stringify(originalAbsences);
+
+    // 1. Filtre par type RTT uniquement
+    const rttOnly = AppEngine.filtrerAbsencesHistorique(originalAbsences, { type: 'RTT', period: 'ALL' });
+    assert.equal(rttOnly.items.length, 1);
+    assert.equal(rttOnly.items[0].id, 2);
+    assert.equal(JSON.stringify(originalAbsences), snapshotBefore, 'Aucune mutation du tableau absences d’origine');
+
+    // 2. Filtre sur la période 2025
+    const period2025 = AppEngine.filtrerAbsencesHistorique(originalAbsences, { type: 'ALL', period: '2025' });
+    assert.equal(period2025.effectivePeriod, '2025');
+    assert.equal(period2025.items.length, 1);
+    assert.equal(period2025.items[0].id, 3);
+
+    // 3. Si l'absence de 2025 est supprimée, la période 2025 disparaît -> réinitialisation automatique à 'ALL'
+    const without2025 = originalAbsences.filter(a => a.id !== 3);
+    const resetResult = AppEngine.filtrerAbsencesHistorique(without2025, { type: 'ALL', period: '2025' });
+    assert.equal(resetResult.effectivePeriod, 'ALL', 'La période filtrée disparue est réinitialisée à ALL');
+    assert.equal(resetResult.items.length, 2, 'Toutes les absences restantes sont affichées');
+});
+
+

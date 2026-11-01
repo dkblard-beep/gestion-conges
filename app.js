@@ -12,6 +12,7 @@
     const GOOGLE_SHEETS_URL = AppConfig.GOOGLE_SHEETS_URL;
     const STORAGE_KEY = AppConfig.STORAGE_KEY;
     const HISTORY_STORAGE_KEY = AppConfig.HISTORY_STORAGE_KEY || `${STORAGE_KEY}_history`;
+    const PREFS_STORAGE_KEY = AppConfig.PREFS_STORAGE_KEY || 'conges_rtt_prefs_v1';
     const BACKUP_STORAGE_KEY = `${STORAGE_KEY}_backup`;
     const CONFLICT_STORAGE_KEY = `${STORAGE_KEY}_conflict_backup`;
     const UNDO_DURATION_MS = 10000;
@@ -38,6 +39,8 @@
         DOM.initCp              = document.getElementById('init-cp');
         DOM.initRtt             = document.getElementById('init-rtt');
         DOM.initPentecote       = document.getElementById('init-pentecote-travaille');
+        DOM.initSeuilAlerte     = document.getElementById('init-seuil-alerte');
+        DOM.initEcheanceCp      = document.getElementById('init-echeance-cp');
         DOM.labelCpYear         = document.getElementById('label-cp-year');
         DOM.labelCpYearNext     = document.getElementById('label-cp-year-next');
         DOM.labelRttYear        = document.getElementById('label-rtt-year');
@@ -45,6 +48,9 @@
         DOM.retraiteAnticipe    = document.getElementById('init-retraite-anticipe');
         DOM.selectCp            = document.getElementById('select-cp-period');
         DOM.selectRtt           = document.getElementById('select-rtt-period');
+        DOM.expirationAlerts    = document.getElementById('expiration-alerts');
+        DOM.filterHistoryType   = document.getElementById('filter-history-type');
+        DOM.filterHistoryPeriod = document.getElementById('filter-history-period');
         DOM.historiqueList      = document.getElementById('historique-list');
         DOM.historiqueVide      = document.getElementById('historique-vide');
         DOM.retraiteCard        = document.getElementById('retraite-card');
@@ -105,12 +111,42 @@
     let lastUndoState = null;       // État d'annulation en mémoire uniquement (expire après 10s, ne survit pas au reload)
     let undoTimeoutId = null;
     let errorTimeoutId = null;
+    let alertPrefs = AppConfig.getAlertOptions(); // Stocké séparément dans PREFS_STORAGE_KEY (Lot B #1)
+    let historyFilterType = 'ALL';                // Lecture seule ('ALL' | 'CP' | 'RTT')
+    let historyFilterPeriod = 'ALL';              // Lecture seule ('ALL' | année), auto-réinitialisé si la période disparaît
+    let injectedReferenceDate = null;             // Permet d'injecter une date de référence déterministe pour les tests UI
 
     /**
      * Retourne les options de jours fériés actives (lundiPentecoteTravaille configurable, true par défaut).
      */
     function getActiveFeriesOptions() {
         return AppConfig.getFeriesOptions(appData && appData.configFeries ? appData.configFeries : {});
+    }
+
+    /**
+     * Lit les préférences locales d'alerte depuis la clé dédiée PREFS_STORAGE_KEY (sans toucher à appData ni au payload Cloud).
+     */
+    function lirePreferencesAlertes() {
+        const raw = localStorage.getItem(PREFS_STORAGE_KEY);
+        if (!raw) return AppConfig.getAlertOptions();
+        try {
+            return AppConfig.getAlertOptions(JSON.parse(raw));
+        } catch (_e) {
+            return AppConfig.getAlertOptions();
+        }
+    }
+
+    /**
+     * Sauvegarde les préférences d'alerte dans la clé localStorage dédiée PREFS_STORAGE_KEY.
+     */
+    function sauvegarderPreferencesAlertes(customPrefs) {
+        alertPrefs = AppConfig.getAlertOptions(customPrefs);
+        try {
+            localStorage.setItem(PREFS_STORAGE_KEY, JSON.stringify(alertPrefs));
+        } catch (e) {
+            console.warn('Impossible de sauvegarder les préférences locales d’alerte :', e);
+        }
+        return alertPrefs;
     }
 
     /**
@@ -429,8 +465,11 @@
         hideUndoBanner();
         pendingDeleteConfirmId = null;
         editingAbsenceId = null;
+        alertPrefs = lirePreferencesAlertes();
+        historyFilterType = 'ALL';
+        historyFilterPeriod = 'ALL';
 
-        const today = AppEngine.formatLocalDate(new Date());
+        const today = AppEngine.formatLocalDate(injectedReferenceDate || new Date());
         currentCPPeriod = AppEngine.getCPPeriod(today);
         currentRTTPeriod = AppEngine.getRTTPeriod(today);
         if (DOM.dateDebut) DOM.dateDebut.value = today;
@@ -649,9 +688,71 @@
             DOM.initPentecote.checked = Boolean(feriesOpts.lundiPentecoteTravaille);
         }
 
+        if (DOM.initSeuilAlerte) {
+            DOM.initSeuilAlerte.value = String(alertPrefs.seuilAlerteJours);
+        }
+        if (DOM.initEcheanceCp) {
+            DOM.initEcheanceCp.value = String(alertPrefs.echeanceReportCP);
+        }
+
         const r = appData.configRetraite || {};
         if (DOM.retraiteLegal) DOM.retraiteLegal.value = r.legal || '';
         if (DOM.retraiteAnticipe) DOM.retraiteAnticipe.value = r.anticipe || '';
+    }
+
+    /**
+     * Calcule et affiche les alertes d'expiration CP et RTT sur le tableau de bord (Lot B).
+     * Utilise la date de référence injectée (`injectedReferenceDate`) ou la date du jour.
+     */
+    function renderExpirationAlerts(customReferenceDate) {
+        if (!DOM.expirationAlerts) return null;
+        const refDate = customReferenceDate || injectedReferenceDate || new Date();
+        const feriesOpts = getActiveFeriesOptions();
+        const result = AppEngine.calculerAlertesExpiration(appData, refDate, {
+            ...feriesOpts,
+            ...alertPrefs,
+            cpPeriod: currentCPPeriod,
+            rttPeriod: currentRTTPeriod
+        });
+
+        DOM.expirationAlerts.innerHTML = '';
+        if (!result.alerts || result.alerts.length === 0) {
+            DOM.expirationAlerts.classList.add('hidden');
+            return result;
+        }
+
+        DOM.expirationAlerts.classList.remove('hidden');
+        result.alerts.forEach(alertItem => {
+            const isRtt = alertItem.type === 'RTT';
+            const card = document.createElement('div');
+            card.dataset.alertType = alertItem.type;
+            card.className = isRtt
+                ? 'flex items-start justify-between gap-3 px-4 py-3 rounded-xl bg-error-light border border-error/20 text-on-error-container text-sm shadow-sm'
+                : 'flex items-start justify-between gap-3 px-4 py-3 rounded-xl bg-primary-light border border-primary/30 text-on-primary-container text-sm shadow-sm';
+
+            card.innerHTML = `
+                <div class="flex items-start gap-2.5">
+                    <span class="material-symbols-outlined text-[20px] shrink-0 mt-0.5">${isRtt ? 'schedule' : 'event_upcoming'}</span>
+                    <div>
+                        <div class="font-bold">Échéance ${alertItem.type} proche (${alertItem.deadline})</div>
+                        <div class="text-xs mt-0.5">${alertItem.message}</div>
+                    </div>
+                </div>
+                <button type="button" class="btn-secondary !py-1 !px-2.5 text-xs shrink-0">Poser</button>
+            `;
+
+            const actionBtn = card.querySelector('button');
+            if (actionBtn) {
+                actionBtn.addEventListener('click', () => {
+                    if (DOM.typeAbsence) DOM.typeAbsence.value = alertItem.type;
+                    root.preparerAbsence(1);
+                });
+            }
+
+            DOM.expirationAlerts.appendChild(card);
+        });
+
+        return result;
     }
 
     root.mettreAJourAffichage = function () {
@@ -662,6 +763,7 @@
             getActiveFeriesOptions()
         );
         afficherSoldes(soldes);
+        renderExpirationAlerts();
         renderHistorique();
         updateRetraite();
         renderCalendar();
@@ -855,6 +957,18 @@
             appData.configFeries = appData.configFeries || {};
             appData.configFeries.lundiPentecoteTravaille = Boolean(DOM.initPentecote.checked);
         }
+
+        // Sauvegarde séparée des préférences d'alerte (Lot B #1 : hors de appData et du payload Google Sheets)
+        const nextSeuil = DOM.initSeuilAlerte && DOM.initSeuilAlerte.value !== ''
+            ? Number(DOM.initSeuilAlerte.value)
+            : alertPrefs.seuilAlerteJours;
+        const nextEcheance = DOM.initEcheanceCp && DOM.initEcheanceCp.value
+            ? String(DOM.initEcheanceCp.value).trim()
+            : alertPrefs.echeanceReportCP;
+        sauvegarderPreferencesAlertes({
+            seuilAlerteJours: nextSeuil,
+            echeanceReportCP: nextEcheance
+        });
 
         sauvegarderDonneesCloud();
         root.mettreAJourAffichage();
@@ -1156,24 +1270,62 @@
         return true;
     };
 
-    // ─── Historique branché sur AppEngine ───
+    // ─── Historique branché sur AppEngine (avec filtres lecture seule Lot B) ───
+    root.changerFiltreHistoriqueType = function () {
+        if (DOM.filterHistoryType) {
+            historyFilterType = DOM.filterHistoryType.value || 'ALL';
+        }
+        renderHistorique();
+    };
+
+    root.changerFiltreHistoriquePeriode = function () {
+        if (DOM.filterHistoryPeriod) {
+            historyFilterPeriod = DOM.filterHistoryPeriod.value || 'ALL';
+        }
+        renderHistorique();
+    };
+
     function renderHistorique() {
         updateDeleteLockUI();
         if (!DOM.historiqueList || !DOM.historiqueVide) return;
         DOM.historiqueList.innerHTML = '';
 
-        if (!appData.absences || appData.absences.length === 0) {
+        const feriesOpts = getActiveFeriesOptions();
+        const filteredResult = AppEngine.filtrerAbsencesHistorique(
+            appData.absences || [],
+            { type: historyFilterType, period: historyFilterPeriod },
+            feriesOpts
+        );
+
+        // Réinitialisation automatique si la période filtrée disparaît (Lot B #5)
+        historyFilterType = filteredResult.effectiveType;
+        historyFilterPeriod = filteredResult.effectivePeriod;
+
+        if (DOM.filterHistoryType) {
+            DOM.filterHistoryType.value = historyFilterType;
+        }
+        if (DOM.filterHistoryPeriod) {
+            DOM.filterHistoryPeriod.innerHTML = '';
+            const allOpt = document.createElement('option');
+            allOpt.value = 'ALL';
+            allOpt.textContent = 'Toutes les périodes';
+            DOM.filterHistoryPeriod.appendChild(allOpt);
+
+            filteredResult.availablePeriods.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p;
+                opt.textContent = `Période ${p} (${AppEngine.formatCPPeriod(p)})`;
+                DOM.filterHistoryPeriod.appendChild(opt);
+            });
+            DOM.filterHistoryPeriod.value = historyFilterPeriod;
+        }
+
+        const tries = filteredResult.items;
+        if (tries.length === 0) {
             DOM.historiqueVide.classList.remove('hidden');
             return;
         }
         DOM.historiqueVide.classList.add('hidden');
-
-        const feriesOpts = getActiveFeriesOptions();
-        const tries = [...appData.absences].sort((a, b) => {
-            const da = AppEngine.parseLocalDate(a.date) || new Date(0);
-            const db = AppEngine.parseLocalDate(b.date) || new Date(0);
-            return db - da;
-        });
 
         const deleteBtnClass = isDeleteUnlocked
             ? 'text-on-surface-variant hover:text-error transition-colors p-2 rounded-full hover:bg-error-container cursor-pointer'
@@ -1325,7 +1477,27 @@
         getEditingAbsenceId: () => editingAbsenceId,
         getPendingDeleteConfirmId: () => pendingDeleteConfirmId,
         getLastUndoState: () => lastUndoState,
-        getBackupHistory: () => lireHistoriqueSauvegardes()
+        getBackupHistory: () => lireHistoriqueSauvegardes(),
+        getAlertPrefs: () => ({ ...alertPrefs }),
+        setAlertPrefs: (prefs) => {
+            sauvegarderPreferencesAlertes(prefs);
+            root.mettreAJourAffichage();
+        },
+        setReferenceDate: (refDate) => {
+            injectedReferenceDate = refDate;
+            if (refDate) {
+                currentCPPeriod = AppEngine.getCPPeriod(refDate);
+                currentRTTPeriod = AppEngine.getRTTPeriod(refDate);
+                updateSelectors();
+            }
+            root.mettreAJourAffichage();
+        },
+        getHistoryFilters: () => ({ type: historyFilterType, period: historyFilterPeriod }),
+        setHistoryFilters: ({ type, period } = {}) => {
+            if (type !== undefined) historyFilterType = type;
+            if (period !== undefined) historyFilterPeriod = period;
+            renderHistorique();
+        }
     };
 
     if (typeof document !== 'undefined') {

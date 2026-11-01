@@ -557,6 +557,244 @@
         return parts.join(', ') || "Aujourd'hui !";
     }
 
+    /**
+     * Compte le nombre de jours ouvrés (inclusifs) entre deux dates locales (`startDate` et `endDate`).
+     * Exclut les week-ends (samedi/dimanche) et les jours fériés chômés selon `options` (dont `lundiPentecoteTravaille`).
+     * Retourne `0` si `startDate > endDate` ou si les dates sont invalides (jamais de nombre négatif).
+     *
+     * @param {string|Date} startDateOrStr
+     * @param {string|Date} endDateOrStr
+     * @param {Object} [options]
+     * @returns {number}
+     */
+    function compterJoursOuvresEntre(startDateOrStr, endDateOrStr, options = {}) {
+        const start = startDateOrStr instanceof Date
+            ? new Date(startDateOrStr.getFullYear(), startDateOrStr.getMonth(), startDateOrStr.getDate(), 0, 0, 0, 0)
+            : parseLocalDate(startDateOrStr);
+        const end = endDateOrStr instanceof Date
+            ? new Date(endDateOrStr.getFullYear(), endDateOrStr.getMonth(), endDateOrStr.getDate(), 0, 0, 0, 0)
+            : parseLocalDate(endDateOrStr);
+
+        if (!start || !end || start.getTime() > end.getTime()) {
+            return 0;
+        }
+
+        const feriesByYear = new Map();
+        function getHolidaysSet(year) {
+            if (!feriesByYear.has(year)) {
+                feriesByYear.set(year, new Set(getJoursFeries(year, options)));
+            }
+            return feriesByYear.get(year);
+        }
+
+        let count = 0;
+        const cursor = new Date(start.getFullYear(), start.getMonth(), start.getDate(), 0, 0, 0, 0);
+        const endMs = end.getTime();
+
+        while (cursor.getTime() <= endMs) {
+            if (!isWeekend(cursor)) {
+                const y = cursor.getFullYear();
+                const dateStr = formatLocalDate(cursor);
+                if (!getHolidaysSet(y).has(dateStr)) {
+                    count++;
+                }
+            }
+            cursor.setDate(cursor.getDate() + 1);
+        }
+
+        return count;
+    }
+
+    /**
+     * Résout la date d'échéance de report des CP pour une période CP donnée (`cpPeriod`, ex: `'2026'`).
+     * Par défaut `'05-31'` de l'année `Number(cpPeriod) + 1` (soit `2027-05-31`).
+     * Gère les années non bissextiles si `'02-29'` est configuré.
+     *
+     * @param {string|number} cpPeriod
+     * @param {string} [echeanceReportCP='05-31']
+     * @returns {Date}
+     */
+    function resolveCPDeadlineDate(cpPeriod, echeanceReportCP = '05-31') {
+        const targetYear = (Number(cpPeriod) || new Date().getFullYear()) + 1;
+        const normalized = AppConfig && typeof AppConfig.getAlertOptions === 'function'
+            ? AppConfig.getAlertOptions({ echeanceReportCP }).echeanceReportCP
+            : (/^\d{2}-\d{2}$/.test(String(echeanceReportCP || '')) ? String(echeanceReportCP) : '05-31');
+
+        const [mStr, dStr] = normalized.split('-');
+        const month = Number(mStr);
+        const maxDayInMonth = new Date(targetYear, month, 0).getDate();
+        const day = Math.min(Number(dStr), maxDayInMonth);
+        return new Date(targetYear, month - 1, day, 0, 0, 0, 0);
+    }
+
+    /**
+     * Calcule les alertes d'expiration des soldes CP (31 mai par défaut ou paramétrable) et RTT (31 décembre)
+     * à partir d'une date de référence injectée (`referenceDate`) pour garantir des tests déterministes.
+     *
+     * Règles métier (Lot B) :
+     * - Seuil d'alerte réglable (`seuilAlerteJours`, défaut `60` jours calendaires).
+     * - Échéance de report CP paramétrable (`echeanceReportCP`, défaut `'05-31'`).
+     * - Compte des jours ouvrés restants (`joursOuvresRestants`) excluant week-ends et fériés et respectant `lundiPentecoteTravaille`.
+     * - Le jour même de l'échéance (`joursCalendairesRestants === 0`), l'alerte reste active si `reste > 0`.
+     * - Le lendemain de l'échéance (`referenceDate > deadline`), aucune alerte ne s'affiche et aucun nombre négatif n'est retourné (`0`).
+     *
+     * @param {Object} appData
+     * @param {string|Date} [referenceDate=new Date()]
+     * @param {Object} [options={}]
+     */
+    function calculerAlertesExpiration(appData, referenceDate = new Date(), options = {}) {
+        const refDate = referenceDate instanceof Date
+            ? new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate(), 0, 0, 0, 0)
+            : (parseLocalDate(referenceDate) || new Date());
+        refDate.setHours(0, 0, 0, 0);
+
+        const alertPrefs = AppConfig && typeof AppConfig.getAlertOptions === 'function'
+            ? AppConfig.getAlertOptions(options)
+            : {
+                seuilAlerteJours: typeof options.seuilAlerteJours === 'number' ? Math.max(0, Math.round(options.seuilAlerteJours)) : 60,
+                echeanceReportCP: typeof options.echeanceReportCP === 'string' ? options.echeanceReportCP : '05-31'
+            };
+
+        const { seuilAlerteJours, echeanceReportCP } = alertPrefs;
+        const cpPeriod = String(options.cpPeriod || getCPPeriod(refDate));
+        const rttPeriod = String(options.rttPeriod || getRTTPeriod(refDate));
+
+        const soldes = calculerSoldes(appData, cpPeriod, rttPeriod, options);
+
+        const cpDeadlineDate = resolveCPDeadlineDate(cpPeriod, echeanceReportCP);
+        const rttDeadlineDate = new Date(Number(rttPeriod) || refDate.getFullYear(), 11, 31, 0, 0, 0, 0);
+
+        function buildAlertItem(type, reste, period, deadlineDate) {
+            const deadlineStr = formatLocalDate(deadlineDate);
+            const refUtc = Date.UTC(refDate.getFullYear(), refDate.getMonth(), refDate.getDate());
+            const deadlineUtc = Date.UTC(deadlineDate.getFullYear(), deadlineDate.getMonth(), deadlineDate.getDate());
+            const rawDiffDays = Math.round((deadlineUtc - refUtc) / 86400000);
+
+            if (rawDiffDays < 0 || reste <= 0) {
+                return {
+                    type,
+                    period,
+                    active: false,
+                    reste: Math.max(0, Number(reste) || 0),
+                    deadline: deadlineStr,
+                    joursCalendairesRestants: 0,
+                    joursOuvresRestants: 0,
+                    message: ''
+                };
+            }
+
+            const joursCalendairesRestants = rawDiffDays;
+            const joursOuvresRestants = compterJoursOuvresEntre(refDate, deadlineDate, options);
+            const active = reste > 0 && joursCalendairesRestants <= seuilAlerteJours;
+            const deadlineFr = deadlineDate.toLocaleDateString('fr-FR');
+            const resteFormatted = reste % 1 === 0 ? String(reste) : reste.toFixed(1);
+            const echeanceLabel = joursCalendairesRestants === 0
+                ? `aujourd'hui (${deadlineFr})`
+                : `dans ${joursCalendairesRestants} j calendaire${joursCalendairesRestants > 1 ? 's' : ''} (échéance ${deadlineFr})`;
+
+            const message = active
+                ? `${type} (${type === 'CP' ? formatCPPeriod(period) : period}) : il vous reste ${resteFormatted} jour${reste > 1 ? 's' : ''} à poser ${echeanceLabel}, soit ${joursOuvresRestants} jour${joursOuvresRestants > 1 ? 's' : ''} ouvré${joursOuvresRestants > 1 ? 's' : ''} disponible${joursOuvresRestants > 1 ? 's' : ''}.`
+                : '';
+
+            return {
+                type,
+                period,
+                active,
+                reste,
+                deadline: deadlineStr,
+                joursCalendairesRestants,
+                joursOuvresRestants,
+                message
+            };
+        }
+
+        const cpAlert = buildAlertItem('CP', soldes.resteCP, cpPeriod, cpDeadlineDate);
+        const rttAlert = buildAlertItem('RTT', soldes.resteRTT, rttPeriod, rttDeadlineDate);
+        const alerts = [rttAlert, cpAlert].filter(a => a.active);
+
+        return {
+            referenceDate: formatLocalDate(refDate),
+            seuilAlerteJours,
+            echeanceReportCP,
+            cp: cpAlert,
+            rtt: rttAlert,
+            alerts
+        };
+    }
+
+    /**
+     * Filtre et trie l'historique des absences par type ('ALL' | 'CP' | 'RTT') et par période ('ALL' | année).
+     * - Fonction pure en lecture seule : ne modifie jamais le tableau `absences` d'origine.
+     * - Réinitialise automatiquement `effectivePeriod` à `'ALL'` si la période filtrée n'existe plus dans `absences`.
+     *
+     * @param {Array} absences
+     * @param {{ type?: string, period?: string }} [filters={}]
+     * @param {Object} [options={}]
+     */
+    function filtrerAbsencesHistorique(absences, filters = {}, options = {}) {
+        const safeList = Array.isArray(absences) ? absences.map(a => ({ ...a })) : [];
+        const rawType = filters && typeof filters.type === 'string' ? filters.type.toUpperCase() : 'ALL';
+        const effectiveType = rawType === 'CP' || rawType === 'RTT' ? rawType : 'ALL';
+        const requestedPeriod = filters && filters.period ? String(filters.period) : 'ALL';
+
+        // Collecte des périodes réellement présentes dans l'historique
+        const periodSet = new Set();
+        const expandedByAbsence = new Map();
+
+        for (const a of safeList) {
+            const expanded = expandAbsenceDays(a, options);
+            const periodsForAbsence = new Set();
+            if (expanded.days.length > 0) {
+                for (const d of expanded.days) {
+                    const p = a.type === 'CP' ? d.cpPeriod : d.rttPeriod;
+                    if (p) {
+                        periodSet.add(String(p));
+                        periodsForAbsence.add(String(p));
+                    }
+                }
+            } else if (a.date) {
+                const fallbackP = a.type === 'CP' ? getCPPeriod(a.date) : getRTTPeriod(a.date);
+                if (fallbackP) {
+                    periodSet.add(String(fallbackP));
+                    periodsForAbsence.add(String(fallbackP));
+                }
+            }
+            expandedByAbsence.set(a, { expanded, periods: periodsForAbsence });
+        }
+
+        const availablePeriods = Array.from(periodSet).sort().reverse();
+        const effectivePeriod =
+            requestedPeriod !== 'ALL' && availablePeriods.includes(requestedPeriod)
+                ? requestedPeriod
+                : 'ALL';
+
+        const filtered = safeList.filter(a => {
+            if (effectiveType !== 'ALL' && a.type !== effectiveType) {
+                return false;
+            }
+            if (effectivePeriod !== 'ALL') {
+                const meta = expandedByAbsence.get(a);
+                if (!meta || !meta.periods.has(effectivePeriod)) {
+                    return false;
+                }
+            }
+            return true;
+        });
+
+        filtered.sort((a, b) => {
+            const da = parseLocalDate(a.date) || new Date(0);
+            const db = parseLocalDate(b.date) || new Date(0);
+            return db - da;
+        });
+
+        return {
+            items: filtered,
+            availablePeriods,
+            effectiveType,
+            effectivePeriod
+        };
+    }
+
     return {
         parseLocalDate,
         formatLocalDate,
@@ -574,7 +812,11 @@
         validerAbsence,
         getAvailablePeriods,
         getDetailedCountdown,
-        formatDetailedCountdown
+        formatDetailedCountdown,
+        compterJoursOuvresEntre,
+        resolveCPDeadlineDate,
+        calculerAlertesExpiration,
+        filtrerAbsencesHistorique
     };
 });
 

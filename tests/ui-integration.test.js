@@ -385,7 +385,7 @@ test('Service Worker (sw.js) : inclut config.js et engine.js et ne supprime que 
                 addAll: async (urls) => { addedUrls.push(...urls); },
                 put: async () => {}
             }),
-            keys: async () => ['conges-pwa-cache-v12', 'conges-pwa-cache-v15', 'autre-app-cache-v1'],
+            keys: async () => ['conges-pwa-cache-v12', 'conges-pwa-cache-v16', 'autre-app-cache-v1'],
             delete: async (name) => { deletedCaches.push(name); return true; },
             match: async () => null
         },
@@ -627,4 +627,94 @@ test('Lot A (Ajustement #5) : supprimer une absence, synchroniser, recharger —
         'Même face à un Cloud retardataire sans updatedAt, l’absence supprimée ne réapparaît pas'
     );
 });
+
+test('Lot B (UI) : réglages d’alerte dans une clé localStorage séparée sans modifier appData ni le payload Google Sheets, et affichage déterministe au 2026-11-01', async () => {
+    let lastPostedPayload = null;
+    const { sandbox, elementsById, localStorage } = createAppSandbox({
+        fetchImpl: async (_url, options = {}) => {
+            if (options.method === 'POST' && options.body) {
+                lastPostedPayload = JSON.parse(options.body);
+                return { ok: true, status: 200 };
+            }
+            return {
+                ok: true,
+                status: 200,
+                json: async () => structuredClone(REAL_USER_DATA)
+            };
+        }
+    });
+
+    await sandbox.__appTestHooks.initApp();
+
+    // 1. Injecter la date du 2026-11-01 avec seuil 60 jours :
+    // L'alerte RTT (6j, échéance 2026-12-31) s'affiche, l'alerte CP (14j, échéance 2027-05-31) ne s'affiche pas
+    sandbox.__appTestHooks.setAlertPrefs({ seuilAlerteJours: 60, echeanceReportCP: '05-31' });
+    sandbox.__appTestHooks.setReferenceDate('2026-11-01');
+
+    const alertsContainer = elementsById.get('expiration-alerts');
+    assert.equal(alertsContainer.classList.contains('hidden'), false, 'Le conteneur d’alertes doit être visible au 2026-11-01');
+    assert.equal(alertsContainer.children.length, 1, 'Une seule alerte (RTT) doit être affichée');
+    assert.equal(alertsContainer.children[0].dataset.alertType, 'RTT');
+    assert.match(alertsContainer.children[0].innerHTML, /2026-12-31/);
+    assert.match(alertsContainer.children[0].innerHTML, /6 jours/);
+
+    // 2. Sauvegarder les paramètres depuis le panneau de configuration :
+    // Vérifie que seuilAlerteJours et echeanceReportCP vont dans conges_rtt_prefs_v1 et PAS dans conges_rtt_data_v2 ni dans le POST Cloud
+    elementsById.get('init-seuil-alerte').value = '45';
+    elementsById.get('init-echeance-cp').value = '06-30';
+    sandbox.sauvegarderConfig();
+
+    const separatePrefs = JSON.parse(localStorage.getItem('conges_rtt_prefs_v1'));
+    assert.equal(separatePrefs.seuilAlerteJours, 45);
+    assert.equal(separatePrefs.echeanceReportCP, '06-30');
+
+    const mainStoredData = JSON.parse(localStorage.getItem('conges_rtt_data_v2'));
+    assert.equal(mainStoredData.seuilAlerteJours, undefined, 'Le format des données principales reste intact');
+    assert.equal(mainStoredData.echeanceReportCP, undefined, 'Le format des données principales reste intact');
+    assert.ok(lastPostedPayload, 'Un POST vers GOOGLE_SHEETS_URL a été effectué');
+    assert.equal(lastPostedPayload.seuilAlerteJours, undefined, 'Le payload Google Sheets ne contient pas seuilAlerteJours');
+    assert.equal(lastPostedPayload.echeanceReportCP, undefined, 'Le payload Google Sheets ne contient pas echeanceReportCP');
+
+    // Avec un seuil abaissé à 45 jours au 2026-11-01 (60j avant le 31/12), l'alerte RTT se masque
+    assert.equal(alertsContainer.classList.contains('hidden'), true);
+});
+
+test('Lot B (UI) : filtres de l’historique en lecture seule (aucun effet sur appData.absences) et réinitialisation si la période filtrée disparaît', async () => {
+    const customData = structuredClone(REAL_USER_DATA);
+    // Ajout d'une absence unique en 2025 pour tester la disparition d'une période filtrée
+    customData.absences.push({ id: 999001, type: 'CP', date: '2025-07-07', duree: 2 });
+
+    const { sandbox, elementsById } = createAppSandbox({
+        fetchImpl: async () => ({
+            ok: true,
+            json: async () => structuredClone(customData)
+        })
+    });
+
+    await sandbox.__appTestHooks.initApp();
+    assert.equal(sandbox.__appTestHooks.getAppData().absences.length, 8);
+
+    // 1. Filtrer par type = 'CP' : n'affiche que les 3 CP (2 en 2026 + 1 en 2025), mais appData.absences garde ses 8 entrées
+    elementsById.get('filter-history-type').value = 'CP';
+    sandbox.changerFiltreHistoriqueType();
+    assert.equal(elementsById.get('historique-list').children.length, 3, 'Seules les 3 absences CP sont affichées');
+    assert.equal(sandbox.__appTestHooks.getAppData().absences.length, 8, 'Aucun effet sur appData.absences (lecture seule)');
+
+    // 2. Filtrer sur la période '2025' : affiche uniquement l'absence 999001
+    elementsById.get('filter-history-type').value = 'ALL';
+    sandbox.changerFiltreHistoriqueType();
+    elementsById.get('filter-history-period').value = '2025';
+    sandbox.changerFiltreHistoriquePeriode();
+    assert.equal(sandbox.__appTestHooks.getHistoryFilters().period, '2025');
+    assert.equal(elementsById.get('historique-list').children.length, 1);
+
+    // 3. Supprimer l'unique absence de la période 2025 -> la période 2025 disparaît, le filtre se réinitialise automatiquement à 'ALL'
+    sandbox.toggleDeleteLock();
+    sandbox.supprimerAbsence(999001, true, 1800000090000);
+
+    assert.equal(sandbox.__appTestHooks.getHistoryFilters().period, 'ALL', 'Le filtre de période se réinitialise automatiquement à ALL');
+    assert.equal(elementsById.get('filter-history-period').value, 'ALL');
+    assert.equal(elementsById.get('historique-list').children.length, 7, 'Les 7 absences de 2026 sont affichées');
+});
+
 

@@ -14,14 +14,52 @@
     // URL publique du script Google Apps (lecture/écriture)
     const GOOGLE_SHEETS_URL = 'https://script.google.com/macros/s/AKfycbxkp3pcNRAZ5ufwrMaaq4T8VS260l8YxtZd3qh8p3VhVGs_c2OHtnTfpotGiT1OCJjV7g/exec';
 
-    // Clé localStorage
+    // Clés localStorage
     const STORAGE_KEY = 'conges_rtt_data_v2';
     const HISTORY_STORAGE_KEY = 'conges_rtt_data_v2_history';
+    const PREFS_STORAGE_KEY = 'conges_rtt_prefs_v1';
     const MAX_BACKUP_HISTORY = 5;
     const CRITICAL_SNAPSHOT_REASONS = new Set(['delete', 'restore', 'import']);
 
     // Types d'absences autorisés
     const TYPES_VALIDES = new Set(['CP', 'RTT']);
+
+    // Configuration par défaut des alertes d'expiration (Lot B — stockée hors de appData dans PREFS_STORAGE_KEY)
+    const DEFAULT_ALERT_OPTIONS = Object.freeze({
+        seuilAlerteJours: 60,
+        echeanceReportCP: '05-31'
+    });
+
+    /**
+     * Valide et normalise les préférences d'alerte d'expiration (seuil en jours calendaires et échéance MM-DD de report CP).
+     * @param {Object} [customPrefs]
+     * @returns {{ seuilAlerteJours: number, echeanceReportCP: string }}
+     */
+    function getAlertOptions(customPrefs = {}) {
+        const rawSeuil = Number(customPrefs && customPrefs.seuilAlerteJours);
+        const seuilAlerteJours =
+            Number.isFinite(rawSeuil) && rawSeuil >= 0 && rawSeuil <= 365
+                ? Math.round(rawSeuil)
+                : DEFAULT_ALERT_OPTIONS.seuilAlerteJours;
+
+        let echeanceReportCP = DEFAULT_ALERT_OPTIONS.echeanceReportCP;
+        if (customPrefs && typeof customPrefs.echeanceReportCP === 'string') {
+            const match = /^(\d{2})-(\d{2})$/.exec(customPrefs.echeanceReportCP.trim());
+            if (match) {
+                const month = Number(match[1]);
+                const day = Number(match[2]);
+                const maxDaysByMonth = [0, 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+                if (month >= 1 && month <= 12 && day >= 1 && day <= maxDaysByMonth[month]) {
+                    echeanceReportCP = `${match[1]}-${match[2]}`;
+                }
+            }
+        }
+
+        return {
+            seuilAlerteJours,
+            echeanceReportCP
+        };
+    }
 
     // Configuration par défaut des jours fériés
     // Le lundi de Pentecôte est travaillé par défaut (journée de solidarité)
@@ -423,9 +461,12 @@
         GOOGLE_SHEETS_URL,
         STORAGE_KEY,
         HISTORY_STORAGE_KEY,
+        PREFS_STORAGE_KEY,
         MAX_BACKUP_HISTORY,
         CRITICAL_SNAPSHOT_REASONS,
         TYPES_VALIDES,
+        DEFAULT_ALERT_OPTIONS,
+        getAlertOptions,
         DEFAULT_FERIES_OPTIONS,
         getFeriesOptions,
         isValidPayload,
