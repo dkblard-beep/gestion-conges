@@ -29,7 +29,7 @@ const REAL_USER_DATA = {
  * Crée un environnement DOM léger à partir des IDs réels présents dans index.html
  * pour tester l'exécution de config.js + engine.js + app.js.
  */
-function createAppSandbox({ localStorageInit = {}, fetchImpl } = {}) {
+function createAppSandbox({ localStorageInit = {}, fetchImpl, systemPrefersDark = false } = {}) {
     const htmlContent = fs.readFileSync(path.join(ROOT_DIR, 'index.html'), 'utf8');
 
     function makeClassList(initial = []) {
@@ -53,6 +53,7 @@ function createAppSandbox({ localStorageInit = {}, fetchImpl } = {}) {
     function createElement(tag = 'div', id = '', initialClasses = []) {
         const listeners = {};
         const children = [];
+        const attributes = new Map();
         let innerHTMLVal = '';
         let classList = makeClassList(initialClasses);
 
@@ -68,6 +69,12 @@ function createAppSandbox({ localStorageInit = {}, fetchImpl } = {}) {
             style: {},
             children,
             classList,
+            setAttribute(k, v) {
+                attributes.set(String(k), String(v));
+            },
+            getAttribute(k) {
+                return attributes.has(String(k)) ? attributes.get(String(k)) : null;
+            },
             get className() {
                 return classList.toString();
             },
@@ -141,6 +148,7 @@ function createAppSandbox({ localStorageInit = {}, fetchImpl } = {}) {
 
     const docListeners = {};
     const document = {
+        documentElement: createElement('html', 'html-root', []),
         getElementById: (id) => elementsById.get(id) || null,
         createElement: (tag) => createElement(tag),
         addEventListener: (evt, fn) => {
@@ -148,6 +156,21 @@ function createAppSandbox({ localStorageInit = {}, fetchImpl } = {}) {
             docListeners[evt].push(fn);
         },
         body: createElement('body')
+    };
+
+    const mqlListeners = [];
+    let currentSystemDark = Boolean(systemPrefersDark);
+    const mediaQueryListMock = {
+        get matches() {
+            return currentSystemDark;
+        },
+        addEventListener: (_evt, fn) => {
+            mqlListeners.push(fn);
+        },
+        triggerSystemChange: (nextDark) => {
+            currentSystemDark = Boolean(nextDark);
+            mqlListeners.forEach(fn => fn({ matches: currentSystemDark }));
+        }
     };
 
     const sandbox = {
@@ -171,6 +194,7 @@ function createAppSandbox({ localStorageInit = {}, fetchImpl } = {}) {
         localStorage,
         document,
         navigator: {},
+        matchMedia: (_query) => mediaQueryListMock,
         fetch: fetchImpl || (async () => ({ ok: true, json: async () => REAL_USER_DATA }))
     };
     sandbox.window = sandbox;
@@ -198,7 +222,7 @@ function createAppSandbox({ localStorageInit = {}, fetchImpl } = {}) {
     vm.runInContext(fs.readFileSync(path.join(ROOT_DIR, 'engine.js'), 'utf8'), sandbox);
     vm.runInContext(fs.readFileSync(path.join(ROOT_DIR, 'app.js'), 'utf8'), sandbox);
 
-    return { sandbox, document, elementsById, localStorage };
+    return { sandbox, document, elementsById, localStorage, mediaQueryListMock };
 }
 
 test('Structure HTML : ordre de chargement des scripts (config.js -> engine.js -> app.js) et modale sécurisée', () => {
@@ -385,7 +409,7 @@ test('Service Worker (sw.js) : inclut config.js et engine.js et ne supprime que 
                 addAll: async (urls) => { addedUrls.push(...urls); },
                 put: async () => {}
             }),
-            keys: async () => ['conges-pwa-cache-v12', 'conges-pwa-cache-v17', 'autre-app-cache-v1'],
+            keys: async () => ['conges-pwa-cache-v12', 'conges-pwa-cache-v18', 'autre-app-cache-v1'],
             delete: async (name) => { deletedCaches.push(name); return true; },
             match: async () => null
         },
@@ -767,6 +791,121 @@ test('Lot C (UI) : le simulateur ne modifie aucun solde tant qu’on n’enregis
     assert.equal(sandbox.__appTestHooks.getAppData().absences.length, 7, 'Le bouton Transformer ne doit pas créer l’absence automatiquement');
     assert.equal(elementsById.get('solde-cp').textContent, '14');
 });
+
+test('Lot D (UI & CSS) : mise à jour de stroke-dashoffset sur les jauges circulaires SVG (et passage en rouge si négatif), présence du FAB mobile et des règles @media (prefers-color-scheme: dark) dans style.css', async () => {
+    // 1. Vérifie que style.css compilé contient bien les règles @media (prefers-color-scheme: dark) et les classes CP/RTT
+    const compiledCss = fs.readFileSync(path.join(ROOT_DIR, 'style.css'), 'utf8');
+    assert.match(compiledCss, /@media\s*\(prefers-color-scheme:\s*dark\)/, 'style.css doit contenir les règles @media (prefers-color-scheme: dark)');
+    assert.match(compiledCss, /\.badge-cp/, 'style.css doit contenir la classe .badge-cp');
+    assert.match(compiledCss, /\.badge-rtt/, 'style.css doit contenir la classe .badge-rtt');
+
+    const { sandbox, elementsById, localStorage } = createAppSandbox({
+        fetchImpl: async () => ({
+            ok: true,
+            json: async () => structuredClone(REAL_USER_DATA)
+        })
+    });
+
+    await sandbox.__appTestHooks.initApp();
+
+    // 2. Vérifie la présence du bouton "+" flottant sur mobile (FAB #fab-new-absence) et son ouverture de la modale
+    const fab = elementsById.get('fab-new-absence');
+    assert.ok(fab, 'Le bouton flottant #fab-new-absence doit être présent dans le DOM');
+    assert.ok(fab.classList.contains('fixed'), 'Le FAB doit être positionné en fixed');
+    assert.ok(fab.classList.contains('md:hidden'), 'Le FAB doit être réservé au mobile (md:hidden)');
+
+    // 3. Vérifie la mise à jour de stroke-dashoffset sur les jauges circulaires SVG (CP = 14/29 -> 48%, RTT = 6/12 -> 50%)
+    const gaugeCp = elementsById.get('gauge-circle-cp');
+    const gaugeRtt = elementsById.get('gauge-circle-rtt');
+    assert.ok(gaugeCp && gaugeRtt, 'Les cercles SVG #gauge-circle-cp et #gauge-circle-rtt doivent exister');
+
+    // Circonférence = 251.33 ; RTT = 50% restant -> offset = 251.33 * (1 - 0.50) = 125.67
+    assert.equal(gaugeRtt.getAttribute('stroke-dashoffset'), '125.67');
+    assert.equal(elementsById.get('gauge-ratio-rtt').textContent, '6 / 12 j');
+    // CP = 14/29 -> 48% restant -> offset = 251.33 * (1 - 0.48) = 130.69
+    assert.equal(gaugeCp.getAttribute('stroke-dashoffset'), '130.69');
+    assert.equal(elementsById.get('gauge-ratio-cp').textContent, '14 / 29 j');
+
+    // 4. Passage en rouge (text-error) si solde négatif
+    sandbox.__appTestHooks.setAppData({
+        ...REAL_USER_DATA,
+        configRTT: { '2026': 4 } // 6 jours pris sur 4 -> reste -2 (négatif)
+    });
+    assert.equal(elementsById.get('solde-rtt').textContent, '-2');
+    assert.equal(gaugeRtt.classList.contains('text-error'), true, 'La jauge circulaire RTT passe en rouge (text-error) si solde négatif');
+    assert.equal(gaugeRtt.getAttribute('stroke-dashoffset'), '0');
+
+    // 5. Bascule manuelle du thème (Automatique / Clair / Sombre) mémorisée dans conges_rtt_prefs_v1 sans toucher à appData
+    sandbox.changerThemePref('dark');
+    assert.equal(sandbox.document.documentElement.getAttribute('data-theme'), 'dark');
+    assert.equal(sandbox.document.documentElement.classList.contains('dark'), true);
+    const savedPrefs = JSON.parse(localStorage.getItem('conges_rtt_prefs_v1'));
+    assert.equal(savedPrefs.theme, 'dark');
+    assert.equal(sandbox.__appTestHooks.getAppData().theme, undefined, 'appData reste intact');
+});
+
+test('Lot D (Correctif critique #1, #2, #3) : thème forcé "light" alors que le système est en "dark" (et l’inverse) — aucune règle dark active en mode forcé "light", activation complète en mode forcé "dark"', async () => {
+    // 1. Vérification statique de style.css compilé avec darkMode: 'class' :
+    // Les variantes dark de Tailwind (.card:is(.dark *), .badge-cp:is(.dark *), etc.) dépendent exclusivement de .dark
+    // et non d'un @media (prefers-color-scheme: dark) non borné.
+    const compiledCss = fs.readFileSync(path.join(ROOT_DIR, 'style.css'), 'utf8');
+    assert.match(compiledCss, /\.card:is\(\.dark \*\)/, 'Tailwind darkMode: "class" doit compiler les variantes sous .dark');
+    assert.match(compiledCss, /\.badge-cp:is\(\.dark \*\)/, 'Les badges CP sombres sont pilotés par .dark');
+    assert.match(compiledCss, /\.badge-rtt:is\(\.dark \*\)/, 'Les badges RTT sombres sont pilotés par .dark');
+    assert.doesNotMatch(
+        compiledCss,
+        /@media\s*\(prefers-color-scheme:\s*dark\)\s*\{\s*\.card\b/,
+        'Aucune règle .card ne doit s’activer par simple @media (prefers-color-scheme: dark) quand le thème est forcé en light'
+    );
+
+    // 2. Système d'exploitation en mode SOMBRE (systemPrefersDark: true)
+    const { sandbox, document, mediaQueryListMock } = createAppSandbox({
+        systemPrefersDark: true,
+        fetchImpl: async () => ({
+            ok: true,
+            json: async () => structuredClone(REAL_USER_DATA)
+        })
+    });
+
+    await sandbox.__appTestHooks.initApp();
+
+    // En mode 'auto' initial avec système sombre -> .dark est actif sur <html>
+    assert.equal(document.documentElement.getAttribute('data-theme'), 'auto');
+    assert.equal(document.documentElement.classList.contains('dark'), true, 'Mode auto + OS sombre -> .dark actif');
+
+    // Bascule manuelle forcée sur "light" alors que l'OS est toujours en "dark" :
+    // -> <html> perd immédiatement la classe .dark et passe à data-theme="light" (aucune règle dark active)
+    sandbox.changerThemePref('light');
+    assert.equal(document.documentElement.getAttribute('data-theme'), 'light');
+    assert.equal(
+        document.documentElement.classList.contains('dark'),
+        false,
+        'Thème forcé "light" avec OS sombre : la classe .dark DOIT être absente de <html> (aucune règle dark active)'
+    );
+
+    // Même si l'OS émet un événement prefers-color-scheme: dark pendant qu'on est en "light", on reste en "light"
+    mediaQueryListMock.triggerSystemChange(true);
+    assert.equal(document.documentElement.classList.contains('dark'), false);
+
+    // 3. Inversement : l'OS passe en mode CLAIR (false), mais l'utilisateur force le thème "dark" :
+    // -> <html> reçoit data-theme="dark" et la classe .dark (toutes les règles dark sont actives)
+    mediaQueryListMock.triggerSystemChange(false);
+    sandbox.changerThemePref('dark');
+    assert.equal(document.documentElement.getAttribute('data-theme'), 'dark');
+    assert.equal(
+        document.documentElement.classList.contains('dark'),
+        true,
+        'Thème forcé "dark" avec OS clair : la classe .dark DOIT être présente sur <html>'
+    );
+
+    // 4. Retour en mode "auto" : suit dynamiquement les changements du système via l'écouteur matchMedia
+    sandbox.changerThemePref('auto');
+    assert.equal(document.documentElement.classList.contains('dark'), false, 'Auto + OS clair -> .dark inactif');
+    mediaQueryListMock.triggerSystemChange(true);
+    assert.equal(document.documentElement.classList.contains('dark'), true, 'Auto + OS basculé en sombre -> .dark actif');
+});
+
+
 
 
 

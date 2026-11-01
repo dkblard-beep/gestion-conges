@@ -5,27 +5,41 @@
 @layer components {
     /* Base styles & utilities */
     .card {
-        @apply bg-white border border-slate-200 rounded-2xl shadow-sm p-6;
+        @apply bg-white border border-slate-200 rounded-2xl shadow-sm p-6 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-100;
     }
     .input-field {
-        @apply w-full bg-white border border-slate-300 text-slate-900 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-transparent transition-shadow text-sm;
+        @apply w-full bg-white border border-slate-300 text-slate-900 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-transparent transition-shadow text-sm dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100;
     }
     .label {
-        @apply block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2;
+        @apply block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2 dark:text-slate-300;
     }
     .btn-primary {
-        @apply bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl px-5 py-2.5 transition-colors flex items-center justify-center gap-2 shadow-sm;
+        @apply bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl px-5 py-2.5 transition-colors flex items-center justify-center gap-2 shadow-sm cursor-pointer;
     }
     .btn-secondary {
-        @apply bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-medium rounded-xl px-5 py-2.5 transition-colors flex items-center justify-center gap-2 shadow-sm;
+        @apply bg-white border border-slate-300 hover:bg-slate-50 text-slate-800 font-medium rounded-xl px-5 py-2.5 transition-colors flex items-center justify-center gap-2 shadow-sm cursor-pointer dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100 dark:hover:bg-slate-700;
     }
     .btn-ghost {
-        @apply text-slate-500 hover:text-slate-900 hover:bg-slate-100 p-2 rounded-lg transition-colors;
+        @apply text-slate-600 hover:text-slate-900 hover:bg-slate-100 p-2 rounded-lg transition-colors cursor-pointer dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-800;
     }
     .badge {
         @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
     }
-    
+
+    /* Couleurs distinctes CP (Bleu/Indigo) et RTT (Émeraude/Teal) avec contraste WCAG AA >= 4.5:1 en clair et sombre */
+    .badge-cp {
+        @apply bg-indigo-100 text-indigo-950 border border-indigo-300 dark:bg-indigo-950 dark:text-indigo-100 dark:border-indigo-700;
+    }
+    .badge-rtt {
+        @apply bg-emerald-100 text-emerald-950 border border-emerald-300 dark:bg-emerald-950 dark:text-emerald-100 dark:border-emerald-700;
+    }
+    .cal-day-cp {
+        @apply bg-indigo-100 text-indigo-950 border-indigo-300 font-semibold dark:bg-indigo-950 dark:text-indigo-100 dark:border-indigo-700;
+    }
+    .cal-day-rtt {
+        @apply bg-emerald-100 text-emerald-950 border-emerald-300 font-semibold dark:bg-emerald-950 dark:text-emerald-100 dark:border-emerald-700;
+    }
+
     /* Smooth transitions */
     .fade-enter {
         opacity: 0;
@@ -36,6 +50,112 @@
         opacity: 1;
         transform: translateY(0);
     }
+}
+
+/* Bascule manuelle du thème (Automatique / Clair / Sombre) mémorisée dans conges_rtt_prefs_v1
+   et mode sombre automatique via @media (prefers-color-scheme: dark).
+   Toute l'interface est pilotée par la classe .dark (et data-theme="dark") sur <html> :
+   en mode forcé "light" (sans .dark et avec data-theme="light"), AUCUNE règle dark ne s'applique,
+   même si le système d'exploitation est en mode sombre. */
+html.dark,
+html[data-theme="dark"] {
+    color-scheme: dark;
+    background-color: #020617;
+    color: #f8fafc;
+}
+
+html:not(.dark),
+html[data-theme="light"] {
+    color-scheme: light;
+    background-color: #f8fafc;
+    color: #0f172a;
+}
+
+@media (prefers-color-scheme: dark) {
+    html[data-theme="auto"].dark {
+        color-scheme: dark;
+    }
+}
+
+html.dark .card,
+html[data-theme="dark"] .card {
+    background-color: #0f172a;
+    border-color: #1e293b;
+    color: #f1f5f9;
+}
+
+html.dark nav,
+html[data-theme="dark"] nav {
+    background-color: #0f172a;
+    border-color: #1e293b;
+}
+
+html.dark .input-field,
+html[data-theme="dark"] .input-field,
+html.dark select,
+html[data-theme="dark"] select {
+    background-color: #1e293b;
+    border-color: #334155;
+    color: #f8fafc;
+}
+
+html.dark .btn-secondary,
+html[data-theme="dark"] .btn-secondary {
+    background-color: #1e293b;
+    border-color: #334155;
+    color: #f1f5f9;
+}
+
+html.dark .text-slate-900,
+html[data-theme="dark"] .text-slate-900,
+html.dark .text-on-surface,
+html[data-theme="dark"] .text-on-surface {
+    color: #f8fafc;
+}
+
+html.dark .text-slate-700,
+html[data-theme="dark"] .text-slate-700,
+html.dark .text-slate-600,
+html[data-theme="dark"] .text-slate-600,
+html.dark .text-slate-500,
+html[data-theme="dark"] .text-slate-500,
+html.dark .text-on-surface-variant,
+html[data-theme="dark"] .text-on-surface-variant {
+    color: #cbd5e1;
+}
+
+html.dark .bg-slate-50,
+html[data-theme="dark"] .bg-slate-50,
+html.dark .bg-surface,
+html[data-theme="dark"] .bg-surface,
+html.dark .bg-surface-container-lowest,
+html[data-theme="dark"] .bg-surface-container-lowest {
+    background-color: #1e293b;
+}
+
+html.dark .border-slate-200,
+html[data-theme="dark"] .border-slate-200,
+html.dark .border-slate-100,
+html[data-theme="dark"] .border-slate-100 {
+    border-color: #334155;
+}
+
+html.dark .badge-cp,
+html[data-theme="dark"] .badge-cp,
+html.dark .cal-day-cp,
+html[data-theme="dark"] .cal-day-cp {
+    background-color: #1e1b4b;
+    color: #e0e7ff;
+    border-color: #4338ca;
+}
+
+html.dark .badge-rtt,
+html[data-theme="dark"] .badge-rtt,
+html.dark .cal-day-rtt,
+html[data-theme="dark"] .cal-day-rtt {
+    background-color: #022c22;
+    color: #d1fae5;
+    border-color: #047857;
 }
 
 /* Material symbols specific adjustments */

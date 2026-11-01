@@ -24,16 +24,18 @@
     // Types d'absences autorisés
     const TYPES_VALIDES = new Set(['CP', 'RTT']);
 
-    // Configuration par défaut des alertes d'expiration (Lot B — stockée hors de appData dans PREFS_STORAGE_KEY)
+    // Configuration par défaut des alertes d'expiration et du thème (Lot B & Lot D — stockée hors de appData dans PREFS_STORAGE_KEY)
+    const THEMES_VALIDES = new Set(['auto', 'light', 'dark']);
     const DEFAULT_ALERT_OPTIONS = Object.freeze({
         seuilAlerteJours: 60,
-        echeanceReportCP: '05-31'
+        echeanceReportCP: '05-31',
+        theme: 'auto'
     });
 
     /**
-     * Valide et normalise les préférences d'alerte d'expiration (seuil en jours calendaires et échéance MM-DD de report CP).
+     * Valide et normalise les préférences locales (seuil d'alerte, échéance MM-DD de report CP, et thème 'auto' | 'light' | 'dark').
      * @param {Object} [customPrefs]
-     * @returns {{ seuilAlerteJours: number, echeanceReportCP: string }}
+     * @returns {{ seuilAlerteJours: number, echeanceReportCP: string, theme: string }}
      */
     function getAlertOptions(customPrefs = {}) {
         const rawSeuil = Number(customPrefs && customPrefs.seuilAlerteJours);
@@ -55,9 +57,15 @@
             }
         }
 
+        const rawTheme = customPrefs && typeof customPrefs.theme === 'string'
+            ? customPrefs.theme.trim().toLowerCase()
+            : DEFAULT_ALERT_OPTIONS.theme;
+        const theme = THEMES_VALIDES.has(rawTheme) ? rawTheme : DEFAULT_ALERT_OPTIONS.theme;
+
         return {
             seuilAlerteJours,
-            echeanceReportCP
+            echeanceReportCP,
+            theme
         };
     }
 
@@ -465,6 +473,7 @@
         MAX_BACKUP_HISTORY,
         CRITICAL_SNAPSHOT_REASONS,
         TYPES_VALIDES,
+        THEMES_VALIDES,
         DEFAULT_ALERT_OPTIONS,
         getAlertOptions,
         DEFAULT_FERIES_OPTIONS,

@@ -67,7 +67,7 @@
     </nav>
 
     <!-- ──────────────── MAIN CONTENT ──────────────── -->
-    <main class="flex-1 w-full max-w-6xl mx-auto p-4 md:p-8 overflow-y-auto">
+    <main class="flex-1 w-full max-w-6xl mx-auto p-4 pb-24 md:p-8 md:pb-8 overflow-y-auto">
         
         <!-- Header Actions (Mobile config & CTA) -->
         <header class="flex justify-between items-center mb-4">
@@ -202,8 +202,8 @@
                         <input type="date" id="init-retraite-anticipe" class="input-field">
                     </div>
                     <div class="pt-2 border-t border-slate-200/80 space-y-3">
-                        <h4 class="text-sm font-semibold text-slate-700">Alertes d'expiration (préférences locales)</h4>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <h4 class="text-sm font-semibold text-slate-700">Alertes d'expiration & Apparence (préférences locales)</h4>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                             <div>
                                 <label class="label" for="init-seuil-alerte">Seuil d'alerte (jours)</label>
                                 <input type="number" id="init-seuil-alerte" min="0" max="365" step="1" value="60" class="input-field" placeholder="60">
@@ -211,6 +211,14 @@
                             <div>
                                 <label class="label" for="init-echeance-cp">Échéance CP (MM-JJ)</label>
                                 <input type="text" id="init-echeance-cp" value="05-31" class="input-field" placeholder="05-31">
+                            </div>
+                            <div>
+                                <label class="label" for="init-theme-mode">Thème d'affichage</label>
+                                <select id="init-theme-mode" onchange="changerThemePref()" class="input-field">
+                                    <option value="auto">Automatique (Système)</option>
+                                    <option value="light">Clair</option>
+                                    <option value="dark">Sombre</option>
+                                </select>
                             </div>
                         </div>
                     </div>
@@ -247,18 +255,32 @@
                 
                 <!-- CP Card -->
                 <div class="card relative overflow-hidden group" id="card-cp">
-                    <div class="absolute top-0 left-0 w-1 h-full bg-primary rounded-l-2xl" id="bar-accent-cp"></div>
+                    <div class="absolute top-0 left-0 w-1 h-full bg-indigo-600 rounded-l-2xl" id="bar-accent-cp"></div>
                     <div class="flex justify-between items-start mb-6">
                         <div class="flex items-center gap-2">
-                            <span class="material-symbols-outlined text-primary bg-primary-light p-1.5 rounded-lg text-[20px]">flight_takeoff</span>
+                            <span class="material-symbols-outlined text-indigo-700 bg-indigo-100 p-1.5 rounded-lg text-[20px]">flight_takeoff</span>
                             <span class="font-semibold text-slate-900">Congés Payés</span>
+                            <span class="badge badge-cp">CP</span>
                         </div>
-                        <select id="select-cp-period" onchange="changerPeriodeCP()" aria-label="Période CP" class="text-sm bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-slate-600 focus:outline-none focus:border-primary cursor-pointer"></select>
+                        <select id="select-cp-period" onchange="changerPeriodeCP()" aria-label="Période CP" class="text-sm bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-slate-700 focus:outline-none focus:border-primary cursor-pointer"></select>
                     </div>
 
-                    <div class="flex items-end gap-4 mb-4">
-                        <div class="text-5xl font-bold text-slate-900 tracking-tight" id="solde-cp">0</div>
-                        <div class="text-sm font-medium text-slate-500 pb-1">jours<br>restants</div>
+                    <!-- Jauge circulaire SVG CP (Lot D #4) : Reste / Total, nombre au centre, rouge si négatif -->
+                    <div class="flex items-center justify-between gap-4 mb-4">
+                        <div class="relative w-28 h-28 flex items-center justify-center shrink-0">
+                            <svg class="w-28 h-28 -rotate-90 transform" viewBox="0 0 100 100" role="img" aria-label="Jauge circulaire Congés Payés">
+                                <circle cx="50" cy="50" r="40" fill="transparent" stroke="currentColor" stroke-width="8" class="text-slate-200 dark:text-slate-700"></circle>
+                                <circle id="gauge-circle-cp" cx="50" cy="50" r="40" fill="transparent" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-dasharray="251.33" stroke-dashoffset="251.33" class="text-indigo-600 transition-all duration-700 ease-out"></circle>
+                            </svg>
+                            <div class="absolute inset-0 flex flex-col items-center justify-center text-center">
+                                <div class="text-3xl font-bold text-slate-900 tracking-tight leading-none" id="solde-cp">0</div>
+                                <div class="text-[10px] font-semibold text-slate-600 mt-1" id="gauge-ratio-cp">0 / 0 j</div>
+                            </div>
+                        </div>
+                        <div class="flex-1 space-y-1">
+                            <div class="text-sm font-semibold text-slate-900">Solde CP disponible</div>
+                            <div class="text-xs text-slate-600">Jours ouvrés restants sur la période sélectionnée</div>
+                        </div>
                     </div>
 
                     <!-- Badge explicite en cas de solde négatif -->
@@ -268,30 +290,44 @@
 
                     <!-- Progress Details : Reste / Total explicite -->
                     <div class="space-y-2">
-                        <div class="flex justify-between text-xs text-slate-500 font-medium">
+                        <div class="flex justify-between text-xs text-slate-600 font-medium">
                             <span>Reste : <strong id="reste-cp-label" class="text-slate-900">0</strong> / Total : <strong id="total-cp" class="text-slate-700">0</strong> j</span>
                             <span>Pris : <span id="pris-cp" class="text-slate-700">0</span> j (<span id="progress-text-cp">0%</span> restants)</span>
                         </div>
-                        <div class="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-                            <div class="h-full bg-primary rounded-full transition-all duration-700 ease-out" id="progress-cp" style="width: 0%"></div>
+                        <div class="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                            <div class="h-full bg-indigo-600 rounded-full transition-all duration-700 ease-out" id="progress-cp" style="width: 0%"></div>
                         </div>
                     </div>
                 </div>
 
                 <!-- RTT Card -->
                 <div class="card relative overflow-hidden group" id="card-rtt">
-                    <div class="absolute top-0 left-0 w-1 h-full bg-success rounded-l-2xl" id="bar-accent-rtt"></div>
+                    <div class="absolute top-0 left-0 w-1 h-full bg-emerald-700 rounded-l-2xl" id="bar-accent-rtt"></div>
                     <div class="flex justify-between items-start mb-6">
                         <div class="flex items-center gap-2">
-                            <span class="material-symbols-outlined text-success bg-success-light p-1.5 rounded-lg text-[20px]">self_improvement</span>
+                            <span class="material-symbols-outlined text-emerald-800 bg-emerald-100 p-1.5 rounded-lg text-[20px]">self_improvement</span>
                             <span class="font-semibold text-slate-900">RTT</span>
+                            <span class="badge badge-rtt">RTT</span>
                         </div>
-                        <select id="select-rtt-period" onchange="changerPeriodeRTT()" aria-label="Période RTT" class="text-sm bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-slate-600 focus:outline-none focus:border-success cursor-pointer"></select>
+                        <select id="select-rtt-period" onchange="changerPeriodeRTT()" aria-label="Période RTT" class="text-sm bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-slate-700 focus:outline-none focus:border-success cursor-pointer"></select>
                     </div>
 
-                    <div class="flex items-end gap-4 mb-4">
-                        <div class="text-5xl font-bold text-slate-900 tracking-tight" id="solde-rtt">0</div>
-                        <div class="text-sm font-medium text-slate-500 pb-1">jours<br>restants</div>
+                    <!-- Jauge circulaire SVG RTT (Lot D #4) : Reste / Total, nombre au centre, rouge si négatif -->
+                    <div class="flex items-center justify-between gap-4 mb-4">
+                        <div class="relative w-28 h-28 flex items-center justify-center shrink-0">
+                            <svg class="w-28 h-28 -rotate-90 transform" viewBox="0 0 100 100" role="img" aria-label="Jauge circulaire RTT">
+                                <circle cx="50" cy="50" r="40" fill="transparent" stroke="currentColor" stroke-width="8" class="text-slate-200 dark:text-slate-700"></circle>
+                                <circle id="gauge-circle-rtt" cx="50" cy="50" r="40" fill="transparent" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-dasharray="251.33" stroke-dashoffset="251.33" class="text-emerald-700 transition-all duration-700 ease-out"></circle>
+                            </svg>
+                            <div class="absolute inset-0 flex flex-col items-center justify-center text-center">
+                                <div class="text-3xl font-bold text-slate-900 tracking-tight leading-none" id="solde-rtt">0</div>
+                                <div class="text-[10px] font-semibold text-slate-600 mt-1" id="gauge-ratio-rtt">0 / 0 j</div>
+                            </div>
+                        </div>
+                        <div class="flex-1 space-y-1">
+                            <div class="text-sm font-semibold text-slate-900">Solde RTT disponible</div>
+                            <div class="text-xs text-slate-600">Jours ouvrés restants sur l'année civile</div>
+                        </div>
                     </div>
 
                     <!-- Badge explicite en cas de solde négatif -->
@@ -301,12 +337,12 @@
 
                     <!-- Progress Details : Reste / Total explicite -->
                     <div class="space-y-2">
-                        <div class="flex justify-between text-xs text-slate-500 font-medium">
+                        <div class="flex justify-between text-xs text-slate-600 font-medium">
                             <span>Reste : <strong id="reste-rtt-label" class="text-slate-900">0</strong> / Total : <strong id="total-rtt" class="text-slate-700">0</strong> j</span>
                             <span>Pris : <span id="pris-rtt" class="text-slate-700">0</span> j (<span id="progress-text-rtt">0%</span> restants)</span>
                         </div>
-                        <div class="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-                            <div class="h-full bg-success rounded-full transition-all duration-700 ease-out" id="progress-rtt" style="width: 0%"></div>
+                        <div class="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                            <div class="h-full bg-emerald-700 rounded-full transition-all duration-700 ease-out" id="progress-rtt" style="width: 0%"></div>
                         </div>
                     </div>
                 </div>
@@ -446,10 +482,10 @@
                 </div>
             </div>
 
-            <!-- Légende accompagnée de texte explicite -->
-            <div class="flex flex-wrap gap-4 mb-4 text-xs font-medium text-slate-500 shrink-0 border-b border-slate-100 pb-4">
-                <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-primary"></span> CP (1j ou ½j)</div>
-                <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-success"></span> RTT (1j ou ½j)</div>
+            <!-- Légende accompagnée de texte explicite (contraste vérifié CP Indigo / RTT Émeraude) -->
+            <div class="flex flex-wrap gap-4 mb-4 text-xs font-medium text-slate-600 shrink-0 border-b border-slate-100 pb-4">
+                <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-indigo-600"></span> CP — Bleu/Indigo (1j ou ½j)</div>
+                <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-700"></span> RTT — Émeraude/Teal (1j ou ½j)</div>
                 <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded bg-error-light border border-error/20"></span> Jour férié chômé</div>
             </div>
 
@@ -463,6 +499,11 @@
         </div>
 
     </main>
+
+    <!-- BOUTON "+" FLOTTANT MOBILE (FAB Lot D #5) -->
+    <button id="fab-new-absence" type="button" onclick="ouvrirNouvelleAbsence()" aria-label="Déclarer une nouvelle absence" title="Déclarer une absence" class="md:hidden fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white shadow-xl flex items-center justify-center transition-transform active:scale-95 cursor-pointer">
+        <span class="material-symbols-outlined text-[28px]">add</span>
+    </button>
 
     <!-- ABSENCE MODAL -->
     <div id="form-absence" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden items-center justify-center p-4 transition-opacity">

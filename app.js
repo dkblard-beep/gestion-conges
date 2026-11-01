@@ -41,6 +41,12 @@
         DOM.initPentecote       = document.getElementById('init-pentecote-travaille');
         DOM.initSeuilAlerte     = document.getElementById('init-seuil-alerte');
         DOM.initEcheanceCp      = document.getElementById('init-echeance-cp');
+        DOM.initThemeMode       = document.getElementById('init-theme-mode');
+        DOM.gaugeCircleCp       = document.getElementById('gauge-circle-cp');
+        DOM.gaugeCircleRtt      = document.getElementById('gauge-circle-rtt');
+        DOM.gaugeRatioCp        = document.getElementById('gauge-ratio-cp');
+        DOM.gaugeRatioRtt       = document.getElementById('gauge-ratio-rtt');
+        DOM.fabNewAbsence       = document.getElementById('fab-new-absence');
         DOM.labelCpYear         = document.getElementById('label-cp-year');
         DOM.labelCpYearNext     = document.getElementById('label-cp-year-next');
         DOM.labelRttYear        = document.getElementById('label-rtt-year');
@@ -153,17 +159,78 @@
     }
 
     /**
-     * Sauvegarde les préférences d'alerte dans la clé localStorage dédiée PREFS_STORAGE_KEY.
+     * Sauvegarde les préférences d'alerte et de thème dans la clé localStorage dédiée PREFS_STORAGE_KEY.
      */
     function sauvegarderPreferencesAlertes(customPrefs) {
-        alertPrefs = AppConfig.getAlertOptions(customPrefs);
+        alertPrefs = AppConfig.getAlertOptions({ ...alertPrefs, ...customPrefs });
         try {
             localStorage.setItem(PREFS_STORAGE_KEY, JSON.stringify(alertPrefs));
         } catch (e) {
             console.warn('Impossible de sauvegarder les préférences locales d’alerte :', e);
         }
+        appliquerTheme(alertPrefs.theme);
         return alertPrefs;
     }
+
+    /**
+     * Applique le thème d'affichage ('auto' | 'light' | 'dark') sur la balise <html>,
+     * en respectant prefers-color-scheme en mode 'auto' et la bascule manuelle en modes 'light' / 'dark' (Lot D #1).
+     */
+    function appliquerTheme(themePref = (alertPrefs && alertPrefs.theme) || 'auto') {
+        const normalized = AppConfig.getAlertOptions({ theme: themePref }).theme;
+        const docEl = typeof document !== 'undefined' && document.documentElement ? document.documentElement : null;
+        const prefersDark =
+            typeof root.matchMedia === 'function' &&
+            Boolean(root.matchMedia('(prefers-color-scheme: dark)').matches);
+
+        const isEffectiveDark = normalized === 'dark' || (normalized === 'auto' && prefersDark);
+
+        if (docEl) {
+            if ( docEl.setAttribute ) {
+                docEl.setAttribute('data-theme', normalized);
+            }
+            if (docEl.dataset) {
+                docEl.dataset.theme = normalized;
+            }
+            if (docEl.classList) {
+                docEl.classList.toggle('dark', isEffectiveDark);
+            }
+        }
+        if (DOM.initThemeMode) {
+            DOM.initThemeMode.value = normalized;
+        }
+        return { theme: normalized, isEffectiveDark };
+    }
+
+    let systemThemeMediaQuery = null;
+    function initSystemThemeListener() {
+        if (typeof root.matchMedia !== 'function' || systemThemeMediaQuery) return;
+        try {
+            const mql = root.matchMedia('(prefers-color-scheme: dark)');
+            if (!mql) return;
+            systemThemeMediaQuery = mql;
+            const onChange = () => {
+                if ((alertPrefs && alertPrefs.theme) === 'auto') {
+                    appliquerTheme('auto');
+                }
+            };
+            if (typeof mql.addEventListener === 'function') {
+                mql.addEventListener('change', onChange);
+            } else if (typeof mql.addListener === 'function') {
+                mql.addListener(onChange);
+            }
+        } catch (_e) {
+            // Ignoré dans les environnements sans MediaQueryList
+        }
+    }
+
+    root.changerThemePref = function (explicitTheme) {
+        const nextTheme = explicitTheme !== undefined
+            ? String(explicitTheme)
+            : (DOM.initThemeMode && DOM.initThemeMode.value ? DOM.initThemeMode.value : 'auto');
+        sauvegarderPreferencesAlertes({ theme: nextTheme });
+        return alertPrefs.theme;
+    };
 
     /**
      * Formate un nombre de jours en préservant les valeurs négatives et les demi-journées exactes (ex: -1.5, 0.5, 14).
@@ -482,6 +549,8 @@
         pendingDeleteConfirmId = null;
         editingAbsenceId = null;
         alertPrefs = lirePreferencesAlertes();
+        initSystemThemeListener();
+        appliquerTheme(alertPrefs.theme);
         historyFilterType = 'ALL';
         historyFilterPeriod = 'ALL';
 
@@ -674,12 +743,57 @@
         if (DOM.progressCp) {
             DOM.progressCp.style.width = `${pctResteCP}%`;
             DOM.progressCp.classList.toggle('bg-error', isNegativeCP);
+            DOM.progressCp.classList.toggle('bg-indigo-600', !isNegativeCP);
             DOM.progressCp.classList.toggle('bg-primary', !isNegativeCP);
         }
         if (DOM.progressRtt) {
             DOM.progressRtt.style.width = `${pctResteRTT}%`;
             DOM.progressRtt.classList.toggle('bg-error', isNegativeRTT);
+            DOM.progressRtt.classList.toggle('bg-emerald-700', !isNegativeRTT);
             DOM.progressRtt.classList.toggle('bg-success', !isNegativeRTT);
+        }
+
+        // Jauges circulaires SVG (Lot D #4) : circonférence 2 * Math.PI * 40 ≈ 251.33
+        const GAUGE_CIRCUMFERENCE = 251.33;
+        if (DOM.gaugeCircleCp) {
+            const offsetCp = isNegativeCP
+                ? 0
+                : Math.round(GAUGE_CIRCUMFERENCE * (1 - pctResteCP / 100) * 100) / 100;
+            DOM.gaugeCircleCp.setAttribute?.('stroke-dasharray', String(GAUGE_CIRCUMFERENCE));
+            DOM.gaugeCircleCp.setAttribute?.('stroke-dashoffset', String(offsetCp));
+            DOM.gaugeCircleCp.style.strokeDasharray = String(GAUGE_CIRCUMFERENCE);
+            DOM.gaugeCircleCp.style.strokeDashoffset = String(offsetCp);
+            DOM.gaugeCircleCp.classList.toggle('text-error', isNegativeCP);
+            DOM.gaugeCircleCp.classList.toggle('text-indigo-600', !isNegativeCP);
+        }
+        if (DOM.gaugeRatioCp) {
+            DOM.gaugeRatioCp.textContent = `${resteCpStr} / ${totalCpStr} j`;
+            DOM.gaugeRatioCp.classList.toggle('text-error', isNegativeCP);
+        }
+
+        if (DOM.gaugeCircleRtt) {
+            const offsetRtt = isNegativeRTT
+                ? 0
+                : Math.round(GAUGE_CIRCUMFERENCE * (1 - pctResteRTT / 100) * 100) / 100;
+            DOM.gaugeCircleRtt.setAttribute?.('stroke-dasharray', String(GAUGE_CIRCUMFERENCE));
+            DOM.gaugeCircleRtt.setAttribute?.('stroke-dashoffset', String(offsetRtt));
+            DOM.gaugeCircleRtt.style.strokeDasharray = String(GAUGE_CIRCUMFERENCE);
+            DOM.gaugeCircleRtt.style.strokeDashoffset = String(offsetRtt);
+            DOM.gaugeCircleRtt.classList.toggle('text-error', isNegativeRTT);
+            DOM.gaugeCircleRtt.classList.toggle('text-emerald-700', !isNegativeRTT);
+        }
+        if (DOM.gaugeRatioRtt) {
+            DOM.gaugeRatioRtt.textContent = `${resteRttStr} / ${totalRttStr} j`;
+            DOM.gaugeRatioRtt.classList.toggle('text-error', isNegativeRTT);
+        }
+
+        if (DOM.barAccentCp) {
+            DOM.barAccentCp.classList.toggle('bg-error', isNegativeCP);
+            DOM.barAccentCp.classList.toggle('bg-indigo-600', !isNegativeCP);
+        }
+        if (DOM.barAccentRtt) {
+            DOM.barAccentRtt.classList.toggle('bg-error', isNegativeRTT);
+            DOM.barAccentRtt.classList.toggle('bg-emerald-700', !isNegativeRTT);
         }
 
         if (DOM.negativeBadgeCp) {
@@ -711,6 +825,9 @@
         }
         if (DOM.initEcheanceCp) {
             DOM.initEcheanceCp.value = String(alertPrefs.echeanceReportCP);
+        }
+        if (DOM.initThemeMode) {
+            DOM.initThemeMode.value = String(alertPrefs.theme || 'auto');
         }
 
         const r = appData.configRetraite || {};
@@ -1032,6 +1149,9 @@
 
             if (isFerie) {
                 baseClass += ' bg-error-container/30 text-on-error-container';
+            } else if (coveredInfo && coveredInfo.entries.length > 0) {
+                const firstType = coveredInfo.entries[0].absence.type;
+                baseClass += firstType === 'CP' ? ' cal-day-cp' : ' cal-day-rtt';
             } else if (isWknd) {
                 baseClass += ' bg-surface-container-lowest text-on-surface-variant opacity-70';
             } else if (isToday) {
@@ -1050,7 +1170,7 @@
                 const types = Array.from(new Set(coveredInfo.entries.map(e => e.absence.type)));
                 const labelType = types.join('+');
                 const weightSuffix = coveredInfo.totalWeight < 1 ? ' ½j' : '';
-                const dotColor = types[0] === 'CP' ? 'bg-primary' : 'bg-secondary';
+                const dotColor = types[0] === 'CP' ? 'bg-indigo-600' : 'bg-emerald-700';
                 contentHTML += `<span class="flex items-center gap-1 text-[9px] font-bold leading-none mt-0.5"><span class="w-1.5 h-1.5 rounded-full ${dotColor}"></span>${labelType}${weightSuffix}</span>`;
                 dayBtn.title = coveredInfo.entries
                     .map(e => `${e.absence.type} (${formatDaysNumber(e.weight)} j)`)
@@ -1146,9 +1266,13 @@
         const nextEcheance = DOM.initEcheanceCp && DOM.initEcheanceCp.value
             ? String(DOM.initEcheanceCp.value).trim()
             : alertPrefs.echeanceReportCP;
+        const nextTheme = DOM.initThemeMode && DOM.initThemeMode.value
+            ? String(DOM.initThemeMode.value).trim()
+            : alertPrefs.theme;
         sauvegarderPreferencesAlertes({
             seuilAlerteJours: nextSeuil,
-            echeanceReportCP: nextEcheance
+            echeanceReportCP: nextEcheance,
+            theme: nextTheme
         });
 
         sauvegarderDonneesCloud();
@@ -1533,11 +1657,11 @@
                 : `Le ${expanded.effectiveStartDate}`;
 
             const iconBgClass = a.type === 'CP'
-                ? 'bg-surface-container-low text-primary'
-                : 'bg-surface-container text-on-surface-variant';
+                ? 'badge-cp'
+                : 'badge-rtt';
             const badgeBgClass = a.type === 'CP'
-                ? 'bg-primary-container text-on-primary-container'
-                : 'bg-surface-container-high text-on-secondary-container';
+                ? 'badge-cp'
+                : 'badge-rtt';
 
             const item = document.createElement('div');
             item.className = 'p-4 flex items-center justify-between hover:bg-surface-bright transition-colors border-b border-surface-container-high/40 last:border-0';
