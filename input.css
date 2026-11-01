@@ -5,7 +5,7 @@
 @layer components {
     /* Base styles & utilities */
     .card {
-        @apply bg-white border border-slate-200 rounded-2xl shadow-sm p-6 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-100;
+        @apply bg-white border border-slate-200 rounded-2xl shadow-sm p-4 sm:p-6 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-100;
     }
     .input-field {
         @apply w-full bg-white border border-slate-300 text-slate-900 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-transparent transition-shadow text-sm dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100;

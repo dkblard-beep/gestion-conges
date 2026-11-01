@@ -2,7 +2,7 @@
 <html lang="fr" class="bg-slate-50 text-slate-900">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#f8fafc">
     <title>Suivi Congés & RTT</title>
     <link rel="manifest" href="manifest.json">
@@ -30,11 +30,12 @@
         }
     </script>
 </head>
-<body class="antialiased min-h-screen flex flex-col md:flex-row">
+<body class="antialiased min-h-screen flex flex-col lg:flex-row">
 
-    <!-- ──────────────── SIDEBAR / NAVIGATION ──────────────── -->
-    <nav class="bg-white border-r border-slate-200 w-full md:w-64 md:min-h-screen flex flex-col p-4 md:sticky md:top-0 h-auto md:h-screen z-10 shrink-0">
-        <div class="flex items-center gap-3 px-2 py-4 mb-6">
+    <!-- ──────────────── NAVIGATION : BARRE FIXE EN BAS SUR MOBILE/TABLETTE (< 1024px) & SIDEBAR SUR DESKTOP (≥ 1024px) ──────────────── -->
+    <nav class="bg-white border-t lg:border-t-0 lg:border-r border-slate-200 fixed bottom-0 left-0 right-0 z-30 lg:static lg:w-64 lg:min-h-screen flex flex-row lg:flex-col px-2 py-1.5 lg:p-4 lg:sticky lg:top-0 h-auto lg:h-screen shrink-0 shadow-[0_-4px_16px_rgba(0,0,0,0.08)] lg:shadow-none">
+        <!-- Logo Desktop uniquement (sur mobile il est dans le header en haut) -->
+        <div class="hidden lg:flex items-center gap-3 px-2 py-4 mb-6">
             <div class="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shrink-0">
                 <span class="material-symbols-outlined text-white text-[18px]">calendar_month</span>
             </div>
@@ -47,26 +48,26 @@
             </div>
         </div>
 
-        <div class="flex md:flex-col gap-1 overflow-x-auto md:overflow-visible pb-2 md:pb-0">
-            <button onclick="showTab('dashboard')" id="nav-dashboard" class="flex items-center gap-3 px-4 py-3 rounded-xl bg-primary-light text-primary font-medium transition-colors text-left text-sm whitespace-nowrap md:whitespace-normal w-full">
+        <div class="grid grid-cols-4 lg:flex lg:flex-col gap-1 w-full">
+            <button onclick="showTab('dashboard')" id="nav-dashboard" class="flex flex-col lg:flex-row items-center justify-center lg:justify-start gap-1 lg:gap-3 px-2 py-2 lg:px-4 lg:py-3 rounded-xl bg-primary-light text-primary font-medium transition-colors text-center lg:text-left text-[11px] sm:text-xs lg:text-sm w-full">
                 <span class="material-symbols-outlined text-[20px]">dashboard</span>
-                Vue d'ensemble
+                <span class="truncate">Vue d'ensemble</span>
             </button>
-            <button onclick="showTab('calendar')" id="nav-calendar" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-colors text-left text-sm whitespace-nowrap md:whitespace-normal w-full">
+            <button onclick="showTab('calendar')" id="nav-calendar" class="flex flex-col lg:flex-row items-center justify-center lg:justify-start gap-1 lg:gap-3 px-2 py-2 lg:px-4 lg:py-3 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-colors text-center lg:text-left text-[11px] sm:text-xs lg:text-sm w-full">
                 <span class="material-symbols-outlined text-[20px]">event_note</span>
-                Calendrier
+                <span class="truncate">Calendrier</span>
             </button>
-            <button onclick="showTab('simulator')" id="nav-simulator" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-colors text-left text-sm whitespace-nowrap md:whitespace-normal w-full">
+            <button onclick="showTab('simulator')" id="nav-simulator" class="flex flex-col lg:flex-row items-center justify-center lg:justify-start gap-1 lg:gap-3 px-2 py-2 lg:px-4 lg:py-3 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-colors text-center lg:text-left text-[11px] sm:text-xs lg:text-sm w-full">
                 <span class="material-symbols-outlined text-[20px]">calculate</span>
-                Simulateur &amp; Ponts
+                <span class="truncate">Simulateur &amp; Ponts</span>
             </button>
-            <button onclick="showTab('stats')" id="nav-stats" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-colors text-left text-sm whitespace-nowrap md:whitespace-normal w-full">
+            <button onclick="showTab('stats')" id="nav-stats" class="flex flex-col lg:flex-row items-center justify-center lg:justify-start gap-1 lg:gap-3 px-2 py-2 lg:px-4 lg:py-3 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-colors text-center lg:text-left text-[11px] sm:text-xs lg:text-sm w-full">
                 <span class="material-symbols-outlined text-[20px]">bar_chart</span>
-                Statistiques
+                <span class="truncate">Statistiques</span>
             </button>
         </div>
 
-        <div class="mt-auto hidden md:block border-t border-slate-200 pt-4">
+        <div class="mt-auto hidden lg:block border-t border-slate-200 pt-4">
             <button onclick="toggleConfig()" class="flex items-center gap-3 px-4 py-3 w-full rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-colors text-left text-sm">
                 <span class="material-symbols-outlined text-[20px]">settings</span>
                 Paramètres
@@ -75,18 +76,26 @@
     </nav>
 
     <!-- ──────────────── MAIN CONTENT ──────────────── -->
-    <main class="flex-1 w-full max-w-6xl mx-auto p-4 pb-24 md:p-8 md:pb-8 overflow-y-auto">
+    <main class="flex-1 w-full max-w-6xl mx-auto p-4 pb-28 lg:p-8 lg:pb-8 overflow-y-auto">
         
-        <!-- Header Actions (Mobile config & CTA) -->
-        <header class="flex justify-between items-center mb-4">
-            <h2 class="text-2xl font-bold text-slate-900">Bonjour 👋</h2>
-            <div class="flex items-center gap-3">
-                <button onclick="toggleConfig()" class="md:hidden btn-ghost" aria-label="Paramètres">
+        <!-- Header Actions (Mobile Branding + Config & CTA) -->
+        <header class="flex justify-between items-center gap-3 mb-5">
+            <div class="flex items-center gap-3 min-w-0">
+                <div class="lg:hidden w-9 h-9 rounded-xl bg-primary flex items-center justify-center shrink-0 shadow-sm">
+                    <span class="material-symbols-outlined text-white text-[20px]">calendar_month</span>
+                </div>
+                <div class="min-w-0">
+                    <h2 class="text-xl sm:text-2xl font-bold text-slate-900 truncate">Bonjour 👋</h2>
+                    <p class="lg:hidden text-[11px] font-medium text-slate-500">Suivi Congés &amp; RTT</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+                <button onclick="toggleConfig()" class="lg:hidden btn-ghost border border-slate-200 bg-white dark:bg-slate-800 dark:border-slate-700" aria-label="Paramètres" title="Paramètres">
                     <span class="material-symbols-outlined">settings</span>
                 </button>
-                <button onclick="ouvrirNouvelleAbsence()" class="btn-primary">
+                <button onclick="ouvrirNouvelleAbsence()" class="btn-primary !px-3.5 !py-2 sm:!px-5 sm:!py-2.5 text-sm">
                     <span class="material-symbols-outlined text-[18px]">add</span>
-                    <span class="hidden sm:inline">Déclarer</span>
+                    <span>Déclarer</span>
                 </button>
             </div>
         </header>
@@ -263,36 +272,36 @@
             <!-- ALERTES D'EXPIRATION CP / RTT (Lot B) -->
             <div id="expiration-alerts" class="hidden space-y-3" role="region" aria-label="Alertes d'expiration de congés"></div>
 
-            <!-- STATS CARDS -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- STATS CARDS : Empilées proprement sous 640px, côte à côte aérées au-dessus -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                 
                 <!-- CP Card -->
                 <div class="card relative overflow-hidden group" id="card-cp">
                     <div class="absolute top-0 left-0 w-1 h-full bg-indigo-600 rounded-l-2xl" id="bar-accent-cp"></div>
-                    <div class="flex justify-between items-start mb-6">
-                        <div class="flex items-center gap-2">
+                    <div class="flex flex-wrap justify-between items-center gap-2 mb-5">
+                        <div class="flex items-center gap-2 shrink-0">
                             <span class="material-symbols-outlined text-indigo-700 bg-indigo-100 p-1.5 rounded-lg text-[20px]">flight_takeoff</span>
-                            <span class="font-semibold text-slate-900">Congés Payés</span>
+                            <span class="font-semibold text-slate-900 whitespace-nowrap">Congés Payés</span>
                             <span class="badge badge-cp">CP</span>
                         </div>
-                        <select id="select-cp-period" onchange="changerPeriodeCP()" aria-label="Période CP" class="text-sm bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-slate-700 focus:outline-none focus:border-primary cursor-pointer"></select>
+                        <select id="select-cp-period" onchange="changerPeriodeCP()" aria-label="Période CP" class="text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-700 focus:outline-none focus:border-primary cursor-pointer shrink-0"></select>
                     </div>
 
                     <!-- Jauge circulaire SVG CP (Lot D #4) : Reste / Total, nombre au centre, rouge si négatif -->
-                    <div class="flex items-center justify-between gap-4 mb-4">
-                        <div class="relative w-28 h-28 flex items-center justify-center shrink-0">
-                            <svg class="w-28 h-28 -rotate-90 transform" viewBox="0 0 100 100" role="img" aria-label="Jauge circulaire Congés Payés">
+                    <div class="flex items-center gap-4 mb-4">
+                        <div class="relative w-24 h-24 sm:w-28 sm:h-28 flex items-center justify-center shrink-0">
+                            <svg class="w-24 h-24 sm:w-28 sm:h-28 -rotate-90 transform" viewBox="0 0 100 100" role="img" aria-label="Jauge circulaire Congés Payés">
                                 <circle cx="50" cy="50" r="40" fill="transparent" stroke="currentColor" stroke-width="8" class="text-slate-200 dark:text-slate-700"></circle>
                                 <circle id="gauge-circle-cp" cx="50" cy="50" r="40" fill="transparent" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-dasharray="251.33" stroke-dashoffset="251.33" class="text-indigo-600 transition-all duration-700 ease-out"></circle>
                             </svg>
                             <div class="absolute inset-0 flex flex-col items-center justify-center text-center">
-                                <div class="text-3xl font-bold text-slate-900 tracking-tight leading-none" id="solde-cp">0</div>
+                                <div class="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight leading-none" id="solde-cp">0</div>
                                 <div class="text-[10px] font-semibold text-slate-600 mt-1" id="gauge-ratio-cp">0 / 0 j</div>
                             </div>
                         </div>
-                        <div class="flex-1 space-y-1">
+                        <div class="flex-1 min-w-0 space-y-1">
                             <div class="text-sm font-semibold text-slate-900">Solde CP disponible</div>
-                            <div class="text-xs text-slate-600">Jours ouvrés restants sur la période sélectionnée</div>
+                            <div class="text-xs text-slate-600 leading-snug">Jours ouvrés restants sur la période sélectionnée</div>
                         </div>
                     </div>
 
@@ -301,11 +310,11 @@
                         Solde négatif : dépassement du quota CP sur cette période
                     </div>
 
-                    <!-- Progress Details : Reste / Total explicite -->
+                    <!-- Progress Details : Reste / Total explicite sans retour à la ligne cassé -->
                     <div class="space-y-2">
-                        <div class="flex justify-between text-xs text-slate-600 font-medium">
-                            <span>Reste : <strong id="reste-cp-label" class="text-slate-900">0</strong> / Total : <strong id="total-cp" class="text-slate-700">0</strong> j</span>
-                            <span>Pris : <span id="pris-cp" class="text-slate-700">0</span> j (<span id="progress-text-cp">0%</span> restants)</span>
+                        <div class="flex flex-wrap justify-between items-center gap-x-3 gap-y-1 text-xs text-slate-600 font-medium">
+                            <span class="whitespace-nowrap">Reste : <strong id="reste-cp-label" class="text-slate-900">0</strong> / Total : <strong id="total-cp" class="text-slate-700">0</strong> j</span>
+                            <span class="whitespace-nowrap">Pris : <span id="pris-cp" class="text-slate-700">0</span> j (<span id="progress-text-cp">0%</span> restants)</span>
                         </div>
                         <div class="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                             <div class="h-full bg-indigo-600 rounded-full transition-all duration-700 ease-out" id="progress-cp" style="width: 0%"></div>
@@ -316,30 +325,30 @@
                 <!-- RTT Card -->
                 <div class="card relative overflow-hidden group" id="card-rtt">
                     <div class="absolute top-0 left-0 w-1 h-full bg-emerald-700 rounded-l-2xl" id="bar-accent-rtt"></div>
-                    <div class="flex justify-between items-start mb-6">
-                        <div class="flex items-center gap-2">
+                    <div class="flex flex-wrap justify-between items-center gap-2 mb-5">
+                        <div class="flex items-center gap-2 shrink-0">
                             <span class="material-symbols-outlined text-emerald-800 bg-emerald-100 p-1.5 rounded-lg text-[20px]">self_improvement</span>
-                            <span class="font-semibold text-slate-900">RTT</span>
+                            <span class="font-semibold text-slate-900 whitespace-nowrap">RTT</span>
                             <span class="badge badge-rtt">RTT</span>
                         </div>
-                        <select id="select-rtt-period" onchange="changerPeriodeRTT()" aria-label="Période RTT" class="text-sm bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-slate-700 focus:outline-none focus:border-success cursor-pointer"></select>
+                        <select id="select-rtt-period" onchange="changerPeriodeRTT()" aria-label="Période RTT" class="text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-700 focus:outline-none focus:border-success cursor-pointer shrink-0"></select>
                     </div>
 
                     <!-- Jauge circulaire SVG RTT (Lot D #4) : Reste / Total, nombre au centre, rouge si négatif -->
-                    <div class="flex items-center justify-between gap-4 mb-4">
-                        <div class="relative w-28 h-28 flex items-center justify-center shrink-0">
-                            <svg class="w-28 h-28 -rotate-90 transform" viewBox="0 0 100 100" role="img" aria-label="Jauge circulaire RTT">
+                    <div class="flex items-center gap-4 mb-4">
+                        <div class="relative w-24 h-24 sm:w-28 sm:h-28 flex items-center justify-center shrink-0">
+                            <svg class="w-24 h-24 sm:w-28 sm:h-28 -rotate-90 transform" viewBox="0 0 100 100" role="img" aria-label="Jauge circulaire RTT">
                                 <circle cx="50" cy="50" r="40" fill="transparent" stroke="currentColor" stroke-width="8" class="text-slate-200 dark:text-slate-700"></circle>
                                 <circle id="gauge-circle-rtt" cx="50" cy="50" r="40" fill="transparent" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-dasharray="251.33" stroke-dashoffset="251.33" class="text-emerald-700 transition-all duration-700 ease-out"></circle>
                             </svg>
                             <div class="absolute inset-0 flex flex-col items-center justify-center text-center">
-                                <div class="text-3xl font-bold text-slate-900 tracking-tight leading-none" id="solde-rtt">0</div>
+                                <div class="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight leading-none" id="solde-rtt">0</div>
                                 <div class="text-[10px] font-semibold text-slate-600 mt-1" id="gauge-ratio-rtt">0 / 0 j</div>
                             </div>
                         </div>
-                        <div class="flex-1 space-y-1">
+                        <div class="flex-1 min-w-0 space-y-1">
                             <div class="text-sm font-semibold text-slate-900">Solde RTT disponible</div>
-                            <div class="text-xs text-slate-600">Jours ouvrés restants sur l'année civile</div>
+                            <div class="text-xs text-slate-600 leading-snug">Jours ouvrés restants sur l'année civile</div>
                         </div>
                     </div>
 
@@ -348,11 +357,11 @@
                         Solde négatif : dépassement du quota RTT sur cette période
                     </div>
 
-                    <!-- Progress Details : Reste / Total explicite -->
+                    <!-- Progress Details : Reste / Total explicite sans retour à la ligne cassé -->
                     <div class="space-y-2">
-                        <div class="flex justify-between text-xs text-slate-600 font-medium">
-                            <span>Reste : <strong id="reste-rtt-label" class="text-slate-900">0</strong> / Total : <strong id="total-rtt" class="text-slate-700">0</strong> j</span>
-                            <span>Pris : <span id="pris-rtt" class="text-slate-700">0</span> j (<span id="progress-text-rtt">0%</span> restants)</span>
+                        <div class="flex flex-wrap justify-between items-center gap-x-3 gap-y-1 text-xs text-slate-600 font-medium">
+                            <span class="whitespace-nowrap">Reste : <strong id="reste-rtt-label" class="text-slate-900">0</strong> / Total : <strong id="total-rtt" class="text-slate-700">0</strong> j</span>
+                            <span class="whitespace-nowrap">Pris : <span id="pris-rtt" class="text-slate-700">0</span> j (<span id="progress-text-rtt">0%</span> restants)</span>
                         </div>
                         <div class="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                             <div class="h-full bg-emerald-700 rounded-full transition-all duration-700 ease-out" id="progress-rtt" style="width: 0%"></div>
@@ -362,9 +371,9 @@
 
             </div>
 
-            <!-- HISTORY -->
-            <div class="card flex flex-col h-[460px]">
-                <div class="flex flex-wrap items-center justify-between gap-3 mb-4 shrink-0">
+            <!-- HISTORY : défilement naturel de la page sur smartphone, sans ascenseur interne disgracieux -->
+            <div class="card flex flex-col">
+                <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
                     <h3 class="font-bold text-slate-900 flex items-center gap-2">
                         <span class="material-symbols-outlined text-slate-400">history</span>
                         Historique des demandes
@@ -385,13 +394,13 @@
                     </div>
                 </div>
 
-                <div class="flex-1 overflow-y-auto pr-2 -mr-2">
-                    <div id="historique-list" class="space-y-3">
+                <div>
+                    <div id="historique-list" class="divide-y divide-slate-200/60 dark:divide-slate-800">
                         <!-- Items injectés via JS -->
                     </div>
 
                     <!-- Empty State -->
-                    <div id="historique-vide" class="hidden flex-col items-center justify-center h-full text-slate-400 space-y-3">
+                    <div id="historique-vide" class="hidden flex-col items-center justify-center py-10 text-slate-400 space-y-3">
                         <span class="material-symbols-outlined text-5xl opacity-50">inbox</span>
                         <p class="text-sm font-medium">Aucune absence enregistrée.</p>
                     </div>
@@ -401,13 +410,13 @@
         </div>
 
         <!-- ══════════════ TAB: CALENDAR ══════════════ -->
-        <div id="tab-calendar" class="hidden card flex-col h-[700px]">
-            <div class="flex items-center justify-between mb-6 shrink-0">
+        <div id="tab-calendar" class="hidden card flex-col min-h-[540px]">
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-6 shrink-0">
                 <h3 class="font-bold text-slate-900 text-lg flex items-center gap-2">
                     <span class="material-symbols-outlined text-primary">calendar_month</span>
                     Planning Annuel
                 </h3>
-                <div class="flex items-center gap-4">
+                <div class="flex flex-wrap items-center gap-2 sm:gap-4">
                     <button id="btn-export-ics" type="button" onclick="exporterCalendrierICS()" class="btn-secondary !py-1.5 !px-3 text-xs">
                         <span class="material-symbols-outlined text-[16px]">download</span>
                         Exporter .ics
@@ -433,7 +442,7 @@
                 <div>Lun</div><div>Mar</div><div>Mer</div><div>Jeu</div><div>Ven</div><div>Sam</div><div>Dim</div>
             </div>
             
-            <div id="calendar-grid-display" class="grid grid-cols-7 gap-1 flex-1 overflow-y-auto content-start">
+            <div id="calendar-grid-display" class="grid grid-cols-7 gap-1 flex-1 content-start">
                 <!-- JS injections -->
             </div>
         </div>
@@ -443,7 +452,7 @@
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6" id="lot-c-simulator-section">
                 <!-- Simulateur de congés -->
                 <div class="card space-y-4">
-                    <div class="flex items-center justify-between gap-2">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
                         <h3 class="font-bold text-slate-900 flex items-center gap-2">
                             <span class="material-symbols-outlined text-primary">calculate</span>
                             Simulateur « Si je pose ces dates »
@@ -591,8 +600,8 @@
 
     </main>
 
-    <!-- BOUTON "+" FLOTTANT MOBILE (FAB Lot D #5) -->
-    <button id="fab-new-absence" type="button" onclick="ouvrirNouvelleAbsence()" aria-label="Déclarer une nouvelle absence" title="Déclarer une absence" class="md:hidden fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white shadow-xl flex items-center justify-center transition-transform active:scale-95 cursor-pointer">
+    <!-- BOUTON "+" FLOTTANT MOBILE (FAB Lot D #5, positionné au-dessus de la barre d'onglets basse) -->
+    <button id="fab-new-absence" type="button" onclick="ouvrirNouvelleAbsence()" aria-label="Déclarer une nouvelle absence" title="Déclarer une absence" class="md:hidden fixed bottom-20 right-4 z-40 w-14 h-14 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white shadow-xl flex items-center justify-center transition-transform active:scale-95 cursor-pointer">
         <span class="material-symbols-outlined text-[28px]">add</span>
     </button>
 
