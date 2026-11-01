@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'conges-pwa-cache-';
-const CACHE_NAME = `${CACHE_PREFIX}v14`; // Incrémenter la version met à jour le cache de l'application
+const CACHE_NAME = `${CACHE_PREFIX}v15`; // Incrémenter la version met à jour le cache de l'application
 const URLS_TO_CACHE = [
   './',
   './index.html',
@@ -18,7 +18,10 @@ self.addEventListener('install', event => {
         return cache.addAll(URLS_TO_CACHE);
       })
   );
-  // Pas de rechargement forcé des clients actifs pendant une saisie
+  // Active le nouveau Service Worker sans forcer de location.reload() sur la page en cours
+  if (typeof self.skipWaiting === 'function') {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener('activate', event => {
@@ -29,6 +32,10 @@ self.addEventListener('activate', event => {
           .filter(cacheName => cacheName.startsWith(CACHE_PREFIX) && cacheName !== CACHE_NAME)
           .map(cacheName => caches.delete(cacheName))
       );
+    }).then(() => {
+      if (self.clients && typeof self.clients.claim === 'function') {
+        return self.clients.claim();
+      }
     })
   );
 });
@@ -39,21 +46,23 @@ self.addEventListener('fetch', event => {
     return;
   }
 
+  // Stratégie Network-First avec repli sur le cache hors-ligne :
+  // garantit que les mises à jour d'interface sont visibles dès le rafraîchissement en ligne.
   event.respondWith(
-    caches.match(event.request)
-      .then(response => {
-        // Retourne la version en cache si elle existe, sinon fait la requête réseau
-        return response || fetch(event.request).then(fetchRes => {
-          return caches.open(CACHE_NAME).then(cache => {
-            cache.put(event.request, fetchRes.clone());
-            return fetchRes;
-          });
+    fetch(event.request)
+      .then(fetchRes => {
+        return caches.open(CACHE_NAME).then(cache => {
+          cache.put(event.request, fetchRes.clone());
+          return fetchRes;
         });
-      }).catch(() => {
-        // En cas de coupure totale (hors ligne), renvoyer index.html pour les navigations
-        if (event.request.mode === 'navigate') {
-          return caches.match('./index.html');
-        }
+      })
+      .catch(() => {
+        return caches.match(event.request).then(cachedRes => {
+          if (cachedRes) return cachedRes;
+          if (event.request.mode === 'navigate') {
+            return caches.match('./index.html');
+          }
+        });
       })
   );
 });

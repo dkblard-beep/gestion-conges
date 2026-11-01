@@ -430,8 +430,16 @@
             return { valid: false, error: 'La durée doit être un multiple de 0,5 jour.' };
         }
 
+        const excludeId = options && options.excludeId !== undefined && options.excludeId !== null
+            ? Number(options.excludeId)
+            : (absence.id !== undefined && absence.id !== null ? Number(absence.id) : null);
+
+        const filteredExisting = Array.isArray(existingAbsences)
+            ? existingAbsences.filter(a => excludeId === null || Number(a.id) !== excludeId)
+            : [];
+
         const expansion = expandAbsenceDays({ ...absence, duree }, options);
-        const coveredMap = buildCalendarCoveredDays(existingAbsences, options);
+        const coveredMap = buildCalendarCoveredDays(filteredExisting, options);
 
         for (const d of expansion.days) {
             const current = coveredMap.get(d.date);
@@ -444,13 +452,13 @@
             }
         }
 
-        // Simulation du solde après ajout (sans blocage si négatif)
+        // Simulation du solde après ajout ou modification (sans blocage si négatif)
         let projectedNegative = false;
         let projectedBalances = {};
         if (appData) {
             const simulatedData = {
                 ...appData,
-                absences: [...existingAbsences, { ...absence, date: expansion.effectiveStartDate, duree }]
+                absences: [...filteredExisting, { ...absence, date: expansion.effectiveStartDate, duree }]
             };
             const affectedPeriods = new Set(
                 expansion.days.map(d => (absence.type === 'CP' ? d.cpPeriod : d.rttPeriod))

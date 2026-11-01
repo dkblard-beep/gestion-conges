@@ -16,6 +16,9 @@
 
     // Clé localStorage
     const STORAGE_KEY = 'conges_rtt_data_v2';
+    const HISTORY_STORAGE_KEY = 'conges_rtt_data_v2_history';
+    const MAX_BACKUP_HISTORY = 5;
+    const CRITICAL_SNAPSHOT_REASONS = new Set(['delete', 'restore', 'import']);
 
     // Types d'absences autorisés
     const TYPES_VALIDES = new Set(['CP', 'RTT']);
@@ -356,9 +359,72 @@
         };
     }
 
+    function formatLocalDayKey(ts = Date.now()) {
+        const d = new Date(ts);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+    }
+
+    /**
+     * Enregistre un instantané dans l'historique des sauvegardes locales (plafond de 5).
+     * - Instantané systématique avant chaque suppression ('delete'), restauration ('restore') ou import ('import').
+     * - Au plus un instantané par jour calendaire pour les autres modifications ('add', 'edit', 'config', 'other').
+     *
+     * @param {Array} existingHistory
+     * @param {Object} currentData
+     * @param {{ reason?: string, label?: string, now?: number }} [options]
+     * @returns {{ history: Array, recorded: boolean, snapshot: Object|null }}
+     */
+    function recordBackupSnapshot(existingHistory, currentData, options = {}) {
+        const history = Array.isArray(existingHistory) ? [...existingHistory] : [];
+        if (!currentData || !isPlainObject(currentData)) {
+            return { history: history.slice(0, MAX_BACKUP_HISTORY), recorded: false, snapshot: null };
+        }
+
+        const reason = options.reason || 'other';
+        const label = options.label || reason;
+        const now = typeof options.now === 'number' && Number.isFinite(options.now) ? options.now : Date.now();
+        const dayKey = formatLocalDayKey(now);
+        const isCritical = CRITICAL_SNAPSHOT_REASONS.has(reason);
+
+        if (!isCritical) {
+            const alreadyHasDailySnapshot = history.some(
+                entry => entry && entry.dayKey === dayKey && !CRITICAL_SNAPSHOT_REASONS.has(entry.reason)
+            );
+            if (alreadyHasDailySnapshot) {
+                return {
+                    history: history.slice(0, MAX_BACKUP_HISTORY),
+                    recorded: false,
+                    snapshot: null
+                };
+            }
+        }
+
+        const snapshot = {
+            id: `${now}-${Math.random().toString(36).slice(2, 7)}`,
+            savedAt: now,
+            dayKey,
+            reason,
+            label,
+            data: JSON.parse(JSON.stringify(migrateData(currentData)))
+        };
+
+        const updatedHistory = [snapshot, ...history].slice(0, MAX_BACKUP_HISTORY);
+        return {
+            history: updatedHistory,
+            recorded: true,
+            snapshot
+        };
+    }
+
     return {
         GOOGLE_SHEETS_URL,
         STORAGE_KEY,
+        HISTORY_STORAGE_KEY,
+        MAX_BACKUP_HISTORY,
+        CRITICAL_SNAPSHOT_REASONS,
         TYPES_VALIDES,
         DEFAULT_FERIES_OPTIONS,
         getFeriesOptions,
@@ -368,7 +434,9 @@
         migrateData,
         areDataPayloadsEqual,
         markUpdated,
-        resolveSyncState
+        resolveSyncState,
+        formatLocalDayKey,
+        recordBackupSnapshot
     };
 });
 

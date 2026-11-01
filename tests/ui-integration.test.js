@@ -166,7 +166,7 @@ function createAppSandbox({ localStorageInit = {}, fetchImpl } = {}) {
          parseFloat,
         parseInt,
         isNaN,
-        setTimeout: (fn) => { fn(); return 1; },
+        setTimeout: (_fn, _ms) => 1,
         clearTimeout: () => {},
         localStorage,
         document,
@@ -385,7 +385,7 @@ test('Service Worker (sw.js) : inclut config.js et engine.js et ne supprime que 
                 addAll: async (urls) => { addedUrls.push(...urls); },
                 put: async () => {}
             }),
-            keys: async () => ['conges-pwa-cache-v12', 'conges-pwa-cache-v14', 'autre-app-cache-v1'],
+            keys: async () => ['conges-pwa-cache-v12', 'conges-pwa-cache-v15', 'autre-app-cache-v1'],
             delete: async (name) => { deletedCaches.push(name); return true; },
             match: async () => null
         },
@@ -455,5 +455,176 @@ test('Verrouillage de la suppression : boutons grisés et suppression bloquée p
     assert.equal(sandbox.__appTestHooks.isDeleteUnlocked(), true);
     sandbox.toggleDeleteLock();
     assert.equal(sandbox.__appTestHooks.isDeleteUnlocked(), false);
+});
+
+test('Lot A : modifier une absence existante met à jour le solde, conserve son ID et met à jour updatedAt', async () => {
+    const { sandbox, elementsById } = createAppSandbox({
+        fetchImpl: async () => ({
+            ok: true,
+            json: async () => structuredClone(REAL_USER_DATA)
+        })
+    });
+
+    await sandbox.__appTestHooks.initApp();
+    const beforeUpdatedAt = sandbox.__appTestHooks.getAppData().updatedAt || 0;
+
+    // On édite le CP du 2026-10-05 (id: 1790412079086, durée initiale 5j -> passe à 3j)
+    const targetId = 1790412079086;
+    const opened = sandbox.editerAbsence(targetId);
+    assert.equal(opened, true);
+    assert.equal(sandbox.__appTestHooks.getEditingAbsenceId(), targetId);
+    assert.equal(elementsById.get('modal-absence-title').textContent, "Modifier l'absence");
+    assert.equal(elementsById.get('date-debut').value, '2026-10-05');
+    assert.equal(Number(elementsById.get('duree-absence').value), 5);
+
+    // Changement de la durée à 3 jours (2 jours de CP économisés -> solde CP passe de 14 à 16)
+    elementsById.get('duree-absence').value = '3';
+    const saved = sandbox.ajouterAbsence(1800000000000);
+    assert.equal(saved, true);
+
+    const updatedData = sandbox.__appTestHooks.getAppData();
+    assert.equal(updatedData.absences.length, 7, 'Le nombre d’absences reste à 7 (pas de doublon créé)');
+    const edited = updatedData.absences.find(a => a.id === targetId);
+    assert.equal(edited.duree, 3);
+    assert.equal(elementsById.get('solde-cp').textContent, '16', 'Le solde CP passe de 14 à 16');
+    assert.ok(updatedData.updatedAt > beforeUpdatedAt, 'La modification d’une absence doit mettre à jour updatedAt');
+});
+
+test('Lot A : confirmation avant suppression, annulation disponible 10s et ne survivant pas à un rechargement', async () => {
+    const { sandbox, elementsById } = createAppSandbox({
+        fetchImpl: async () => ({
+            ok: true,
+            json: async () => structuredClone(REAL_USER_DATA)
+        })
+    });
+
+    await sandbox.__appTestHooks.initApp();
+    sandbox.toggleDeleteLock(); // Déverrouille le cadenas
+
+    const targetId = 1790970282472; // RTT 1j du 2026-09-25
+    const actionTime = 1800000000000;
+
+    // 1. Si la confirmation est refusée (confirmed = false), la suppression n'a pas lieu
+    assert.equal(sandbox.supprimerAbsence(targetId, false, actionTime), false);
+    assert.equal(sandbox.__appTestHooks.getAppData().absences.length, 7);
+
+    // 2. Étape de demande de confirmation inline puis confirmation explicite
+    sandbox.demanderConfirmationSuppression(targetId);
+    assert.equal(sandbox.__appTestHooks.getPendingDeleteConfirmId(), targetId);
+    assert.equal(sandbox.supprimerAbsence(targetId, true, actionTime), true);
+    assert.equal(sandbox.__appTestHooks.getAppData().absences.length, 6);
+    assert.equal(elementsById.get('solde-rtt').textContent, '7', 'Le solde RTT passe de 6 à 7');
+    assert.equal(elementsById.get('undo-banner').classList.contains('hidden'), false, 'La bannière Annuler est visible');
+
+    // 3. Annulation dans les 10 secondes (à t + 5s) -> restaure l'absence et le solde RTT = 6
+    const undone = sandbox.annulerDerniereAction(actionTime + 5000);
+    assert.equal(undone, true);
+    assert.equal(sandbox.__appTestHooks.getAppData().absences.length, 7);
+    assert.equal(elementsById.get('solde-rtt').textContent, '6');
+
+    // 4. Nouvelle suppression mais tentative d'annulation après 10s (à t + 10001ms) -> expirée
+    sandbox.supprimerAbsence(targetId, true, actionTime + 20000);
+    assert.equal(sandbox.__appTestHooks.getAppData().absences.length, 6);
+    const expiredUndo = sandbox.annulerDerniereAction(actionTime + 30001);
+    assert.equal(expiredUndo, false, 'L’annulation ne doit plus fonctionner après 10 secondes');
+    assert.equal(sandbox.__appTestHooks.getAppData().absences.length, 6);
+
+    // 5. Ne survit pas à un rechargement (initApp réinitialise lastUndoState)
+    sandbox.supprimerAbsence(1791001510220, true, actionTime + 40000);
+    assert.ok(sandbox.__appTestHooks.getLastUndoState() !== null);
+    await sandbox.__appTestHooks.initApp();
+    assert.equal(sandbox.__appTestHooks.getLastUndoState(), null, 'L’annulation ne doit pas survivre à un rechargement');
+});
+
+test('Lot A : historique des 5 dernières sauvegardes locales et restauration réversible', async () => {
+    const { sandbox, elementsById } = createAppSandbox({
+        fetchImpl: async () => ({
+            ok: true,
+            json: async () => structuredClone(REAL_USER_DATA)
+        })
+    });
+
+    await sandbox.__appTestHooks.initApp();
+    sandbox.toggleDeleteLock();
+
+    // Supprime une absence -> crée un instantané obligatoire ('delete') contenant les 7 absences
+    const targetId = 1790412079086; // CP 5j
+    sandbox.supprimerAbsence(targetId, true, 1800000010000);
+    assert.equal(sandbox.__appTestHooks.getAppData().absences.length, 6);
+    assert.equal(elementsById.get('solde-cp').textContent, '19');
+
+    let history = sandbox.__appTestHooks.getBackupHistory();
+    assert.equal(history.length, 1);
+    assert.equal(history[0].reason, 'delete');
+    assert.equal(history[0].data.absences.length, 7);
+
+    const snapshotToRestoreId = history[0].id;
+
+    // Restauration de cet instantané -> doit d'abord enregistrer l'état actuel (6 absences) dans l'historique ('restore')
+    const restored = sandbox.restaurerSauvegardeLocale(snapshotToRestoreId, 1800000020000);
+    assert.equal(restored, true);
+    assert.equal(sandbox.__appTestHooks.getAppData().absences.length, 7, 'Les 7 absences sont restaurées');
+    assert.equal(elementsById.get('solde-cp').textContent, '14', 'Le solde CP de référence (14) est restauré');
+
+    history = sandbox.__appTestHooks.getBackupHistory();
+    assert.equal(history.length, 2, 'Un instantané "Avant restauration" a été enregistré');
+    assert.equal(history[0].reason, 'restore');
+    assert.equal(history[0].label, 'Avant restauration');
+    assert.equal(history[0].data.absences.length, 6, 'L’état à 6 absences est sauvegardé pour rendre la restauration réversible');
+
+    // Vérifie qu'on peut inverser la restauration en restaurant history[0]
+    sandbox.restaurerSauvegardeLocale(history[0].id, 1800000030000);
+    assert.equal(sandbox.__appTestHooks.getAppData().absences.length, 6);
+});
+
+test('Lot A (Ajustement #5) : supprimer une absence, synchroniser, recharger — l’absence supprimée ne réapparaît pas depuis le cloud', async () => {
+    // Simulation d'un serveur Cloud qui met à jour ses données lors du POST
+    let cloudState = structuredClone(REAL_USER_DATA);
+
+    const { sandbox, elementsById } = createAppSandbox({
+        fetchImpl: async (_url, options = {}) => {
+            if (options.method === 'POST' && options.body) {
+                cloudState = JSON.parse(options.body);
+                return { ok: true, status: 200 };
+            }
+            return {
+                ok: true,
+                status: 200,
+                json: async () => structuredClone(cloudState)
+            };
+        }
+    });
+
+    await sandbox.__appTestHooks.initApp();
+    assert.equal(sandbox.__appTestHooks.getAppData().absences.length, 7);
+
+    // 1. Déverrouiller et supprimer l'absence RTT du 2026-11-12 (id: 1793543141050, 2j)
+    const deletedId = 1793543141050;
+    sandbox.toggleDeleteLock();
+    const deleted = sandbox.supprimerAbsence(deletedId, true, 1800000050000);
+    assert.equal(deleted, true);
+    assert.equal(sandbox.__appTestHooks.getAppData().absences.length, 6);
+    assert.equal(elementsById.get('solde-rtt').textContent, '8');
+
+    // 2. Recharger l'application (initApp) après synchronisation Cloud
+    await sandbox.__appTestHooks.initApp();
+    const afterReloadAbsences = sandbox.__appTestHooks.getAppData().absences;
+    assert.equal(afterReloadAbsences.length, 6, 'Après rechargement, il reste bien 6 absences');
+    assert.equal(
+        afterReloadAbsences.some(a => a.id === deletedId),
+        false,
+        'L’absence supprimée ne doit pas réapparaître après rechargement'
+    );
+    assert.equal(elementsById.get('solde-rtt').textContent, '8');
+
+    // 3. Même si le Cloud renvoie un cache distant obsolète (les 7 absences d'origine sans updatedAt),
+    // les données locales plus récentes (updatedAt mis à jour lors de la suppression) empêchent la réapparition
+    cloudState = structuredClone(REAL_USER_DATA); // Cloud obsolète à 7 absences sans updatedAt
+    await sandbox.__appTestHooks.initApp();
+    assert.equal(
+        sandbox.__appTestHooks.getAppData().absences.some(a => a.id === deletedId),
+        false,
+        'Même face à un Cloud retardataire sans updatedAt, l’absence supprimée ne réapparaît pas'
+    );
 });
 

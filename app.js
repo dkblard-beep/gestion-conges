@@ -11,8 +11,10 @@
 
     const GOOGLE_SHEETS_URL = AppConfig.GOOGLE_SHEETS_URL;
     const STORAGE_KEY = AppConfig.STORAGE_KEY;
+    const HISTORY_STORAGE_KEY = AppConfig.HISTORY_STORAGE_KEY || `${STORAGE_KEY}_history`;
     const BACKUP_STORAGE_KEY = `${STORAGE_KEY}_backup`;
     const CONFLICT_STORAGE_KEY = `${STORAGE_KEY}_conflict_backup`;
+    const UNDO_DURATION_MS = 10000;
 
     // Cache des références DOM
     const DOM = {};
@@ -53,6 +55,8 @@
         DOM.typeAbsence         = document.getElementById('type-absence');
         DOM.dureeAbsence        = document.getElementById('duree-absence');
         DOM.btnSubmitAbsence    = document.getElementById('btn-submit-absence');
+        DOM.modalAbsenceTitle   = document.getElementById('modal-absence-title');
+        DOM.modalAbsenceIcon    = document.getElementById('modal-absence-icon');
         DOM.previewBox          = document.getElementById('absence-preview');
         DOM.previewDates        = document.getElementById('preview-dates');
         DOM.previewShift        = document.getElementById('preview-shift');
@@ -62,11 +66,16 @@
         DOM.modalErrorText      = document.getElementById('modal-error-text');
         DOM.errorMessage        = document.getElementById('error-message');
         DOM.errorText           = document.getElementById('error-text');
+        DOM.undoBanner          = document.getElementById('undo-banner');
+        DOM.undoText            = document.getElementById('undo-text');
+        DOM.btnUndoAction       = document.getElementById('btn-undo-action');
         DOM.conflictBanner      = document.getElementById('conflict-banner');
         DOM.conflictDescription = document.getElementById('conflict-description');
         DOM.syncStatusDot       = document.getElementById('sync-status-dot');
         DOM.syncStatusText      = document.getElementById('sync-status-text');
         DOM.configSection       = document.getElementById('config-section');
+        DOM.backupHistoryList   = document.getElementById('backup-history-list');
+        DOM.backupHistoryEmpty  = document.getElementById('backup-history-empty');
         DOM.formAbsence         = document.getElementById('form-absence');
         DOM.anticipeContainer   = document.getElementById('anticipe-container');
         DOM.decompteLegal       = document.getElementById('decompte-legal');
@@ -91,6 +100,10 @@
     let pendingConflict = null;     // { localData, remoteData, reason }
     let isSubmittingAbsence = false;
     let isDeleteUnlocked = false;   // Verrouillé par défaut pour éviter les suppressions accidentelles
+    let pendingDeleteConfirmId = null; // ID en attente de confirmation de suppression
+    let editingAbsenceId = null;    // ID de l'absence en cours d'édition (null si création)
+    let lastUndoState = null;       // État d'annulation en mémoire uniquement (expire après 10s, ne survit pas au reload)
+    let undoTimeoutId = null;
     let errorTimeoutId = null;
 
     /**
@@ -159,7 +172,7 @@
     }
 
     /**
-     * Persiste une copie de sauvegarde dans localStorage avant toute transformation ou résolution.
+     * Persiste une copie de sauvegarde simple dans localStorage avant résolution de conflit.
      */
     function creerSauvegardeSecours(dataToBackup) {
         if (!dataToBackup) return;
@@ -173,6 +186,149 @@
         }
     }
 
+    // ─── Historique des 5 dernières sauvegardes locales (Lot A) ───
+    function lireHistoriqueSauvegardes() {
+        const raw = localStorage.getItem(HISTORY_STORAGE_KEY);
+        if (!raw) return [];
+        try {
+            const parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (_e) {
+            return [];
+        }
+    }
+
+    /**
+     * Enregistre un instantané dans l'historique local (plafond 5) selon les règles du Lot A :
+     * - Systématique avant chaque suppression ('delete'), restauration ('restore') ou import ('import').
+     * - Au plus un instantané par jour calendaire pour les autres modifications ('add', 'edit', 'config').
+     */
+    function enregistrerSauvegardeLocale(label, reason = 'other', customNow = Date.now()) {
+        const currentHistory = lireHistoriqueSauvegardes();
+        const result = AppConfig.recordBackupSnapshot(currentHistory, appData, {
+            reason,
+            label,
+            now: customNow
+        });
+        if (result.recorded) {
+            try {
+                localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(result.history));
+            } catch (e) {
+                console.warn('Impossible de sauvegarder l’historique local :', e);
+            }
+        }
+        renderBackupHistory();
+        return result;
+    }
+
+    /**
+     * Restaure une sauvegarde locale depuis l'historique.
+     * Règle Lot A #1 : Avant toute restauration, enregistre l'état actuel dans l'historique (restauration réversible).
+     */
+    root.restaurerSauvegardeLocale = function (snapshotId, customNow = Date.now()) {
+        const history = lireHistoriqueSauvegardes();
+        const target = history.find(entry => entry && entry.id === snapshotId);
+        if (!target || !target.data) return false;
+
+        // 1. Enregistre l'état actuel dans l'historique avant d'écraser (réversibilité garantie)
+        enregistrerSauvegardeLocale('Avant restauration', 'restore', customNow);
+        enregistrerActionAnnulable(appData, 'Sauvegarde restaurée', customNow);
+
+        // 2. Applique les données restaurées et met à jour updatedAt
+        appData = AppConfig.migrateData(target.data);
+        sauvegarderDonneesCloud(customNow);
+        updateSelectors();
+        root.mettreAJourAffichage();
+        root.mettreAJourApercuAbsence();
+        return true;
+    };
+
+    function renderBackupHistory() {
+        if (!DOM.backupHistoryList || !DOM.backupHistoryEmpty) return;
+        const history = lireHistoriqueSauvegardes();
+        DOM.backupHistoryList.innerHTML = '';
+
+        if (history.length === 0) {
+            DOM.backupHistoryEmpty.classList.remove('hidden');
+            return;
+        }
+        DOM.backupHistoryEmpty.classList.add('hidden');
+
+        history.forEach(entry => {
+            const row = document.createElement('div');
+            row.className = 'flex items-center justify-between gap-2 p-2.5 rounded-xl bg-white border border-slate-200';
+            const dateStr = new Date(entry.savedAt).toLocaleString('fr-FR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            const count = Array.isArray(entry.data?.absences) ? entry.data.absences.length : 0;
+
+            row.innerHTML = `
+                <div>
+                    <div class="font-semibold text-slate-900">${entry.label || 'Sauvegarde'}</div>
+                    <div class="text-slate-500">${dateStr} • ${count} absence${count > 1 ? 's' : ''}</div>
+                </div>
+                <button type="button" class="btn-secondary !py-1 !px-2.5 text-xs">Restaurer</button>
+            `;
+
+            const restoreBtn = row.querySelector('button');
+            restoreBtn.addEventListener('click', () => root.restaurerSauvegardeLocale(entry.id));
+            DOM.backupHistoryList.appendChild(row);
+        });
+    }
+
+    // ─── Annulation de la dernière action (10 secondes, en mémoire uniquement) ───
+    function enregistrerActionAnnulable(previousData, label, now = Date.now()) {
+        if (undoTimeoutId) clearTimeout(undoTimeoutId);
+        lastUndoState = {
+            snapshotData: JSON.parse(JSON.stringify(AppConfig.migrateData(previousData))),
+            label,
+            createdAt: now,
+            expiresAt: now + UNDO_DURATION_MS
+        };
+
+        if (DOM.undoBanner && DOM.undoText) {
+            DOM.undoText.textContent = `${label} — Vous pouvez annuler cette action pendant 10 secondes.`;
+            DOM.undoBanner.classList.remove('hidden');
+            DOM.undoBanner.classList.add('flex');
+        }
+
+        undoTimeoutId = setTimeout(() => {
+            hideUndoBanner();
+        }, UNDO_DURATION_MS);
+    }
+
+    function hideUndoBanner() {
+        if (undoTimeoutId) {
+            clearTimeout(undoTimeoutId);
+            undoTimeoutId = null;
+        }
+        lastUndoState = null;
+        if (DOM.undoBanner) {
+            DOM.undoBanner.classList.add('hidden');
+            DOM.undoBanner.classList.remove('flex');
+        }
+    }
+
+    root.annulerDerniereAction = function (now = Date.now()) {
+        if (!lastUndoState || now > lastUndoState.expiresAt) {
+            hideUndoBanner();
+            return false;
+        }
+
+        const restored = AppConfig.migrateData(lastUndoState.snapshotData);
+        hideUndoBanner();
+        appData = restored;
+        sauvegarderDonneesCloud(now);
+        updateSelectors();
+        root.mettreAJourAffichage();
+        root.mettreAJourApercuAbsence();
+        return true;
+    };
+
     /**
      * Affiche ou masque la bannière de conflit permettant à l'utilisateur de choisir explicitement.
      */
@@ -185,7 +341,6 @@
             return;
         }
 
-        // Préserve les deux versions dans localStorage jusqu'au choix explicite
         try {
             localStorage.setItem(CONFLICT_STORAGE_KEY, JSON.stringify(conflictObj));
         } catch (e) {
@@ -212,6 +367,7 @@
 
         if (choice === 'remote' && remoteData) {
             creerSauvegardeSecours(localData);
+            enregistrerSauvegardeLocale('Avant application version distante', 'import');
             appData = AppConfig.migrateData(remoteData);
             appData.pendingSync = false;
             localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
@@ -266,9 +422,13 @@
 
     /**
      * Initialisation de l'application : lecture locale, récupération distante, résolution sans écrasement.
+     * L'annulation (lastUndoState) est systématiquement réinitialisée et ne survit pas à un rechargement.
      */
     async function initApp() {
         initDOM();
+        hideUndoBanner();
+        pendingDeleteConfirmId = null;
+        editingAbsenceId = null;
 
         const today = AppEngine.formatLocalDate(new Date());
         currentCPPeriod = AppEngine.getCPPeriod(today);
@@ -325,10 +485,14 @@
     }
 
     /**
-     * Sauvegarde locale immédiate + envoi Cloud avec vérification réelle de l'état.
+     * Sauvegarde locale immédiate (avec mise à jour de updatedAt) + envoi Cloud avec vérification réelle.
      */
-    async function sauvegarderDonneesCloud() {
-        AppConfig.markUpdated(appData);
+    async function sauvegarderDonneesCloud(customNow) {
+        const nextTs = Math.max(
+            typeof customNow === 'number' && Number.isFinite(customNow) ? customNow : Date.now(),
+            (Number(appData.updatedAt) || 0) + 1
+        );
+        AppConfig.markUpdated(appData, nextTs);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
         setSyncStatus('en_cours');
 
@@ -353,7 +517,6 @@
                         return;
                     }
                 }
-                // Si la vérification GET ne confirme pas encore l'égalité, on indique honnêtement l'état local
                 setSyncStatus('local', 'Enregistré en local (envoi cloud effectué)');
             } catch (_verifyErr) {
                 setSyncStatus('local', 'Enregistré en local (vérification hors-ligne)');
@@ -462,7 +625,6 @@
             DOM.progressRtt.classList.toggle('bg-success', !isNegativeRTT);
         }
 
-        // Badges textuels explicites pour accompagner la couleur en cas de solde négatif
         if (DOM.negativeBadgeCp) {
             DOM.negativeBadgeCp.classList.toggle('hidden', !isNegativeCP);
             if (isNegativeCP) {
@@ -503,6 +665,7 @@
         renderHistorique();
         updateRetraite();
         renderCalendar();
+        renderBackupHistory();
     };
 
     // ─── Navigation Onglets ───
@@ -679,6 +842,8 @@
 
     // ─── Configuration des compteurs et de Pentecôte ───
     root.sauvegarderConfig = function () {
+        enregistrerSauvegardeLocale('Modification des paramètres', 'config');
+
         appData.configCP[currentCPPeriod] = parseFloat(DOM.initCp.value) || 0;
         appData.configRTT[currentRTTPeriod] = parseFloat(DOM.initRtt.value) || 0;
 
@@ -697,8 +862,28 @@
         root.toggleConfig();
     };
 
-    // ─── Modale d'absence, Aperçu temps réel & Enregistrement ───
+    // ─── Modale d'absence (Création & Édition), Aperçu temps réel & Enregistrement ───
+    function setModalMode(mode, absenceToEdit = null) {
+        if (mode === 'edit' && absenceToEdit) {
+            editingAbsenceId = Number(absenceToEdit.id);
+            if (DOM.modalAbsenceTitle) DOM.modalAbsenceTitle.textContent = "Modifier l'absence";
+            if (DOM.modalAbsenceIcon) DOM.modalAbsenceIcon.textContent = 'edit';
+            if (DOM.btnSubmitAbsence) DOM.btnSubmitAbsence.textContent = 'Enregistrer les modifications';
+        } else {
+            editingAbsenceId = null;
+            if (DOM.modalAbsenceTitle) DOM.modalAbsenceTitle.textContent = 'Nouvelle Absence';
+            if (DOM.modalAbsenceIcon) DOM.modalAbsenceIcon.textContent = 'add_circle';
+            if (DOM.btnSubmitAbsence) DOM.btnSubmitAbsence.textContent = 'Enregistrer';
+        }
+    }
+
+    root.ouvrirNouvelleAbsence = function () {
+        setModalMode('create');
+        root.preparerAbsence(1);
+    };
+
     root.preparerAbsence = function (duree, dateStr) {
+        setModalMode('create');
         if (DOM.dureeAbsence && duree !== undefined) {
             DOM.dureeAbsence.value = duree;
         }
@@ -720,6 +905,29 @@
     };
 
     /**
+     * Ouvre la modale préremplie pour modifier une absence existante.
+     */
+    root.editerAbsence = function (id) {
+        const target = (appData.absences || []).find(a => a.id === Number(id));
+        if (!target) return false;
+
+        setModalMode('edit', target);
+        if (DOM.typeAbsence) DOM.typeAbsence.value = target.type;
+        if (DOM.dateDebut) DOM.dateDebut.value = target.date;
+        if (DOM.dureeAbsence) DOM.dureeAbsence.value = target.duree;
+
+        hideModalError();
+        if (typeof root.toggleAbsenceModal === 'function') {
+            root.toggleAbsenceModal(true);
+        } else if (DOM.formAbsence) {
+            DOM.formAbsence.classList.remove('hidden');
+            DOM.formAbsence.classList.add('flex');
+        }
+        root.mettreAJourApercuAbsence();
+        return true;
+    };
+
+    /**
      * Calcule et affiche l'aperçu de l'absence dans la modale sans rien enregistrer.
      */
     root.mettreAJourApercuAbsence = function () {
@@ -728,7 +936,10 @@
         const type = DOM.typeAbsence.value;
         const date = DOM.dateDebut.value;
         const duree = parseFloat(DOM.dureeAbsence.value);
-        const feriesOpts = getActiveFeriesOptions();
+        const feriesOpts = {
+            ...getActiveFeriesOptions(),
+            excludeId: editingAbsenceId
+        };
 
         const validation = AppEngine.validerAbsence(
             { type, date, duree },
@@ -761,7 +972,6 @@
             DOM.previewShift.classList.add('hidden');
         }
 
-        // Affichage du solde projeté par période impactée
         const periodEntries = Object.entries(validation.projectedBalances || {});
         if (periodEntries.length > 0) {
             const parts = periodEntries.map(([p, reste]) => {
@@ -786,12 +996,11 @@
     };
 
     /**
-     * Valide et enregistre une nouvelle absence.
-     * - Empêche les doubles soumissions.
-     * - En cas d'erreur, conserve la modale ouverte et les valeurs saisies intactes.
-     * - Ne modifie jamais rétroactivement les congés déjà enregistrés.
+     * Valide et enregistre une nouvelle absence ou la modification d'une absence existante.
+     * - Met systématiquement à jour updatedAt via sauvegarderDonneesCloud().
+     * - Enregistre l'instantané quotidien (au plus 1/jour) et l'annulation 10s en mémoire.
      */
-    root.ajouterAbsence = function () {
+    root.ajouterAbsence = function (customNow = Date.now()) {
         if (isSubmittingAbsence) return false;
         isSubmittingAbsence = true;
         if (DOM.btnSubmitAbsence) DOM.btnSubmitAbsence.disabled = true;
@@ -800,7 +1009,10 @@
             const type = DOM.typeAbsence.value;
             const date = DOM.dateDebut.value;
             const duree = parseFloat(DOM.dureeAbsence.value);
-            const feriesOpts = getActiveFeriesOptions();
+            const feriesOpts = {
+                ...getActiveFeriesOptions(),
+                excludeId: editingAbsenceId
+            };
 
             const validation = AppEngine.validerAbsence(
                 { type, date, duree },
@@ -812,22 +1024,42 @@
             if (!validation.valid) {
                 showModalError(validation.error);
                 showError(validation.error);
-                // Conserve la modale ouverte et la saisie intacte
                 return false;
             }
 
             hideModalError();
             hideError();
 
-            // Enregistre la date effective ouvrée calculée par le moteur
-            appData.absences.push({
-                id: Date.now(),
-                type,
-                date: validation.effectiveStartDate,
-                duree
-            });
+            if (editingAbsenceId !== null) {
+                const idx = appData.absences.findIndex(a => a.id === editingAbsenceId);
+                if (idx === -1) {
+                    setModalMode('create');
+                    return false;
+                }
+                enregistrerSauvegardeLocale('Modification d’une absence', 'edit', customNow);
+                enregistrerActionAnnulable(appData, 'Absence modifiée', customNow);
 
-            sauvegarderDonneesCloud();
+                appData.absences[idx] = {
+                    ...appData.absences[idx],
+                    id: editingAbsenceId,
+                    type,
+                    date: validation.effectiveStartDate,
+                    duree
+                };
+            } else {
+                enregistrerSauvegardeLocale('Ajout d’une absence', 'add', customNow);
+                enregistrerActionAnnulable(appData, 'Absence ajoutée', customNow);
+
+                appData.absences.push({
+                    id: typeof customNow === 'number' ? customNow : Date.now(),
+                    type,
+                    date: validation.effectiveStartDate,
+                    duree
+                });
+            }
+
+            setModalMode('create');
+            sauvegarderDonneesCloud(customNow);
             updateSelectors();
             root.mettreAJourAffichage();
 
@@ -862,18 +1094,62 @@
 
     root.toggleDeleteLock = function () {
         isDeleteUnlocked = !isDeleteUnlocked;
+        if (!isDeleteUnlocked) {
+            pendingDeleteConfirmId = null;
+        }
         updateDeleteLockUI();
         renderHistorique();
         return isDeleteUnlocked;
     };
 
-    root.supprimerAbsence = function (id) {
+    root.demanderConfirmationSuppression = function (id) {
         if (!isDeleteUnlocked) {
             showError("Suppression verrouillée : cliquez d'abord sur « Déverrouiller ».");
             return false;
         }
-        appData.absences = appData.absences.filter(a => a.id !== Number(id));
-        sauvegarderDonneesCloud();
+        pendingDeleteConfirmId = Number(id);
+        renderHistorique();
+        return true;
+    };
+
+    root.annulerConfirmationSuppression = function () {
+        pendingDeleteConfirmId = null;
+        renderHistorique();
+    };
+
+    /**
+     * Supprime une absence après déverrouillage ET confirmation.
+     * Prend systématiquement un instantané dans l'historique des 5 sauvegardes locales ('delete')
+     * et active l'annulation pendant 10 secondes en mémoire.
+     */
+    root.supprimerAbsence = function (id, confirmed = undefined, customNow = Date.now()) {
+        if (!isDeleteUnlocked) {
+            showError("Suppression verrouillée : cliquez d'abord sur « Déverrouiller ».");
+            return false;
+        }
+
+        const numId = Number(id);
+        const exists = (appData.absences || []).some(a => a.id === numId);
+        if (!exists) return false;
+
+        // Confirmation avant suppression : soit confirmée via le bouton inline (confirmed === true ou pendingDeleteConfirmId === numId),
+        // soit via window.confirm si présent.
+        const isConfirmed =
+            confirmed === true ||
+            pendingDeleteConfirmId === numId ||
+            (confirmed === undefined && (typeof root.confirm === 'function' ? Boolean(root.confirm('Confirmer la suppression de cette absence ?')) : true));
+
+        if (!isConfirmed) {
+            return false;
+        }
+
+        // Instantané obligatoire avant chaque suppression (Lot A #2)
+        enregistrerSauvegardeLocale('Avant suppression d’absence', 'delete', customNow);
+        enregistrerActionAnnulable(appData, 'Absence supprimée', customNow);
+
+        pendingDeleteConfirmId = null;
+        appData.absences = appData.absences.filter(a => a.id !== numId);
+        sauvegarderDonneesCloud(customNow);
         updateSelectors();
         root.mettreAJourAffichage();
         root.mettreAJourApercuAbsence();
@@ -912,7 +1188,6 @@
             const day = dateObj.getDate();
             const month = dateObj.toLocaleDateString('fr-FR', { month: 'short' });
 
-            // Périodes couvertes (affiche les deux périodes si le congé est ventilé à cheval)
             const periodsCovered = Array.from(
                 new Set(expanded.days.map(d => (a.type === 'CP' ? AppEngine.formatCPPeriod(d.cpPeriod) : d.rttPeriod)))
             );
@@ -935,6 +1210,8 @@
             item.className = 'p-4 flex items-center justify-between hover:bg-surface-bright transition-colors border-b border-surface-container-high/40 last:border-0';
 
             const dureeStr = formatDaysNumber(a.duree);
+            const isConfirmingThis = isDeleteUnlocked && pendingDeleteConfirmId === a.id;
+
             item.innerHTML = `
                 <div class="flex items-start gap-3">
                     <div class="w-10 h-10 rounded-lg ${iconBgClass} flex flex-col items-center justify-center shrink-0">
@@ -949,24 +1226,58 @@
                         <p class="text-xs text-on-surface-variant mt-0.5">${dureeStr} jour${a.duree > 1 ? 's' : ''} • ${periodTag}</p>
                     </div>
                 </div>
-                <div class="flex flex-col items-end gap-1">
-                    <button type="button" ${isDeleteUnlocked ? '' : 'disabled'} title="${deleteBtnTitle}" class="${deleteBtnClass}" aria-label="Supprimer">
-                        <span class="material-symbols-outlined text-[20px]">delete</span>
+                <div class="flex items-center gap-1">
+                    <button type="button" data-action="edit" title="Modifier cette demande" class="text-on-surface-variant hover:text-primary transition-colors p-2 rounded-full hover:bg-primary-light cursor-pointer" aria-label="Modifier">
+                        <span class="material-symbols-outlined text-[20px]">edit</span>
                     </button>
+                    ${isConfirmingThis
+                        ? `<button type="button" data-action="confirm-delete" class="px-2.5 py-1 rounded-lg bg-error-light border border-error/20 text-on-error-container text-xs font-bold cursor-pointer">Confirmer ?</button>
+                           <button type="button" data-action="cancel-delete" class="px-2 py-1 rounded-lg bg-slate-100 text-slate-600 text-xs font-medium cursor-pointer">Non</button>`
+                        : `<button type="button" data-action="delete" ${isDeleteUnlocked ? '' : 'disabled'} title="${deleteBtnTitle}" class="${deleteBtnClass}" aria-label="Supprimer">
+                               <span class="material-symbols-outlined text-[20px]">delete</span>
+                           </button>`
+                    }
                 </div>
             `;
 
-            const deleteBtn = item.querySelector('button');
-            deleteBtn.disabled = !isDeleteUnlocked;
-            deleteBtn.className = deleteBtnClass;
-            deleteBtn.addEventListener('click', () => root.supprimerAbsence(a.id));
+            // Liaisons d'événements propres par data-action (avec repli sur button pour le sandbox léger)
+            const editBtn = item.querySelector('[data-action="edit"]');
+            if (editBtn) {
+                editBtn.addEventListener('click', () => root.editerAbsence(a.id));
+            }
+
+            const confirmBtn = item.querySelector('[data-action="confirm-delete"]');
+            if (confirmBtn) {
+                confirmBtn.addEventListener('click', () => root.supprimerAbsence(a.id, true));
+            }
+
+            const cancelBtn = item.querySelector('[data-action="cancel-delete"]');
+            if (cancelBtn) {
+                cancelBtn.addEventListener('click', () => root.annulerConfirmationSuppression());
+            }
+
+            const deleteBtn = item.querySelector('[data-action="delete"]') || (!confirmBtn ? item.querySelector('button') : null);
+            if (deleteBtn) {
+                deleteBtn.disabled = !isDeleteUnlocked;
+                deleteBtn.className = deleteBtnClass;
+                deleteBtn.addEventListener('click', () => {
+                    if (!isDeleteUnlocked) {
+                        root.supprimerAbsence(a.id, false);
+                    } else {
+                        root.demanderConfirmationSuppression(a.id);
+                    }
+                });
+            }
 
             DOM.historiqueList.appendChild(item);
         });
     }
 
     root.toggleConfig = function () {
-        if (DOM.configSection) DOM.configSection.classList.toggle('hidden');
+        if (DOM.configSection) {
+            DOM.configSection.classList.toggle('hidden');
+            renderBackupHistory();
+        }
     };
 
     function showModalError(msg) {
@@ -1010,7 +1321,11 @@
         getSyncState: () => currentSyncState,
         getPendingConflict: () => pendingConflict,
         getCurrentPeriods: () => ({ cp: currentCPPeriod, rtt: currentRTTPeriod }),
-        isDeleteUnlocked: () => isDeleteUnlocked
+        isDeleteUnlocked: () => isDeleteUnlocked,
+        getEditingAbsenceId: () => editingAbsenceId,
+        getPendingDeleteConfirmId: () => pendingDeleteConfirmId,
+        getLastUndoState: () => lastUndoState,
+        getBackupHistory: () => lireHistoriqueSauvegardes()
     };
 
     if (typeof document !== 'undefined') {

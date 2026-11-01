@@ -76,7 +76,7 @@
                 <button onclick="toggleConfig()" class="md:hidden btn-ghost" aria-label="Paramètres">
                     <span class="material-symbols-outlined">settings</span>
                 </button>
-                <button onclick="toggleAbsenceModal(true)" class="btn-primary">
+                <button onclick="ouvrirNouvelleAbsence()" class="btn-primary">
                     <span class="material-symbols-outlined text-[18px]">add</span>
                     <span class="hidden sm:inline">Déclarer</span>
                 </button>
@@ -91,6 +91,17 @@
             </div>
             <button onclick="hideError()" class="btn-ghost !p-1 text-on-error-container" aria-label="Fermer l'alerte">
                 <span class="material-symbols-outlined text-[18px]">close</span>
+            </button>
+        </div>
+
+        <!-- BANNIÈRE D'ANNULATION DE LA DERNIÈRE ACTION (10 secondes, mémoire uniquement) -->
+        <div id="undo-banner" role="status" class="hidden mb-6 bg-primary-light border border-primary/30 text-on-primary-container px-4 py-3 rounded-xl items-center justify-between gap-3 text-sm font-medium shadow-sm">
+            <div class="flex items-center gap-2">
+                <span class="material-symbols-outlined text-[18px] text-primary">undo</span>
+                <span id="undo-text">Action effectuée.</span>
+            </div>
+            <button id="btn-undo-action" type="button" onclick="annulerDerniereAction()" class="btn-secondary !py-1.5 !px-3 text-xs font-semibold">
+                Annuler (10s)
             </button>
         </div>
 
@@ -191,6 +202,17 @@
                         <input type="date" id="init-retraite-anticipe" class="input-field">
                     </div>
                 </div>
+            </div>
+
+            <!-- Historique des 5 dernières sauvegardes locales -->
+            <div id="backup-history-section" class="mt-6 pt-6 border-t border-slate-200 space-y-3">
+                <div class="flex items-center justify-between">
+                    <h4 class="text-sm font-semibold text-slate-700">5 dernières sauvegardes locales (restauration réversible)</h4>
+                </div>
+                <div id="backup-history-list" class="space-y-2 text-xs">
+                    <!-- Injecté via JS -->
+                </div>
+                <p id="backup-history-empty" class="text-xs text-slate-500">Aucune sauvegarde locale enregistrée pour le moment.</p>
             </div>
 
             <div class="flex flex-wrap justify-between items-center gap-3 mt-6 pt-6 border-t border-slate-200">
@@ -346,8 +368,8 @@
                 <span class="material-symbols-outlined">close</span>
             </button>
             <h3 class="text-xl font-bold text-slate-900 mb-6 flex items-center gap-2">
-                <span class="material-symbols-outlined text-primary">add_circle</span>
-                Nouvelle Absence
+                <span id="modal-absence-icon" class="material-symbols-outlined text-primary">add_circle</span>
+                <span id="modal-absence-title">Nouvelle Absence</span>
             </h3>
             
             <div class="space-y-5">

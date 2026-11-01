@@ -243,3 +243,69 @@ test('Synchronisation & Validation payload (config.js) : updatedAt manquant trai
     assert.equal(invalidRemoteResult.data.absences.length, 2);
 });
 
+test('Lot A (engine.js) : validerAbsence avec excludeId permet de modifier une absence sur ses propres dates mais bloque un vrai chevauchement', () => {
+    const existing = [
+        { id: 100, type: 'CP', date: '2026-10-05', duree: 5 },
+        { id: 200, type: 'RTT', date: '2026-10-12', duree: 1 }
+    ];
+
+    // Sans excludeId, modifier l'absence 100 sur la même date échoue pour chevauchement avec elle-même
+    const withoutExclude = AppEngine.validerAbsence(
+        { type: 'CP', date: '2026-10-05', duree: 3 },
+        existing
+    );
+    assert.equal(withoutExclude.valid, false);
+
+    // Avec excludeId: 100, la modification sur ses propres dates est valide
+    const withExclude = AppEngine.validerAbsence(
+        { type: 'CP', date: '2026-10-05', duree: 3 },
+        existing,
+        { excludeId: 100 }
+    );
+    assert.equal(withExclude.valid, true);
+
+    // Si l'absence 100 modifiée déborde sur l'absence 200 (lun 12/10), elle est bien bloquée
+    const overlapOther = AppEngine.validerAbsence(
+        { type: 'CP', date: '2026-10-05', duree: 6 },
+        existing,
+        { excludeId: 100 }
+    );
+    assert.equal(overlapOther.valid, false);
+    assert.match(overlapOther.error, /Chevauchement/);
+});
+
+test('Lot A (config.js) : recordBackupSnapshot applique le plafond de 5, maximum 1/jour pour les modifs courantes, et systématique pour delete/restore/import', () => {
+    const sampleData = { absences: [{ id: 1, type: 'CP', date: '2026-10-05', duree: 5 }], configCP: { '2026': 29 }, configRTT: { '2026': 12 } };
+    const day1Morning = new Date(2026, 10, 1, 9, 0, 0).getTime();
+    const day1Afternoon = new Date(2026, 10, 1, 15, 0, 0).getTime();
+    const day2Morning = new Date(2026, 10, 2, 10, 0, 0).getTime();
+
+    // 1re modification courante ('edit') le jour 1 -> enregistrée
+    let res = AppConfig.recordBackupSnapshot([], sampleData, { reason: 'edit', label: 'Modif 1', now: day1Morning });
+    assert.equal(res.recorded, true);
+    assert.equal(res.history.length, 1);
+
+    // 2e modification courante ('add') le même jour 1 -> ignorée (max 1/jour pour les autres modifications)
+    res = AppConfig.recordBackupSnapshot(res.history, sampleData, { reason: 'add', label: 'Modif 2 même jour', now: day1Afternoon });
+    assert.equal(res.recorded, false);
+    assert.equal(res.history.length, 1);
+
+    // Modification le jour 2 -> enregistrée
+    res = AppConfig.recordBackupSnapshot(res.history, sampleData, { reason: 'edit', label: 'Modif jour 2', now: day2Morning });
+    assert.equal(res.recorded, true);
+    assert.equal(res.history.length, 2);
+
+    // Actions critiques ('delete', 'restore', 'import') le même jour -> toujours enregistrées, plafond à 5
+    for (let i = 1; i <= 5; i++) {
+        res = AppConfig.recordBackupSnapshot(res.history, sampleData, {
+            reason: i % 2 === 0 ? 'restore' : 'delete',
+            label: `Action critique ${i}`,
+            now: day2Morning + i * 1000
+        });
+        assert.equal(res.recorded, true);
+    }
+
+    assert.equal(res.history.length, 5, 'Le plafond de 5 sauvegardes locales est respecté');
+    assert.equal(res.history[0].label, 'Action critique 5', 'La sauvegarde la plus récente est en tête');
+});
+
