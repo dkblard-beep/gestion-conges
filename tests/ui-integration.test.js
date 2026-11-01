@@ -385,7 +385,7 @@ test('Service Worker (sw.js) : inclut config.js et engine.js et ne supprime que 
                 addAll: async (urls) => { addedUrls.push(...urls); },
                 put: async () => {}
             }),
-            keys: async () => ['conges-pwa-cache-v12', 'conges-pwa-cache-v13', 'autre-app-cache-v1'],
+            keys: async () => ['conges-pwa-cache-v12', 'conges-pwa-cache-v14', 'autre-app-cache-v1'],
             delete: async (name) => { deletedCaches.push(name); return true; },
             match: async () => null
         },
@@ -413,5 +413,47 @@ test('Service Worker (sw.js) : inclut config.js et engine.js et ne supprime que 
     await activatePromise;
 
     assert.deepEqual(deletedCaches, ['conges-pwa-cache-v12'], 'Seul l’ancien cache de cette application doit être supprimé');
+});
+
+test('Verrouillage de la suppression : boutons grisés et suppression bloquée par défaut, déblocage manuel persistant jusqu’au reclic', async () => {
+    const { sandbox, elementsById } = createAppSandbox({
+        fetchImpl: async () => ({
+            ok: true,
+            json: async () => structuredClone(REAL_USER_DATA)
+        })
+    });
+
+    await sandbox.__appTestHooks.initApp();
+
+    const initialCount = sandbox.__appTestHooks.getAppData().absences.length;
+    const targetId = REAL_USER_DATA.absences[0].id;
+
+    // 1. Par défaut, le cadenas est verrouillé et les boutons corbeille sont grisés/désactivés
+    assert.equal(sandbox.__appTestHooks.isDeleteUnlocked(), false);
+    assert.equal(elementsById.get('delete-lock-icon').textContent, 'lock');
+    const firstItemBtn = elementsById.get('historique-list').children[0].children[0];
+    assert.equal(firstItemBtn.disabled, true, 'Le bouton de suppression doit être désactivé quand verrouillé');
+    assert.ok(firstItemBtn.className.includes('opacity-50'), 'Le bouton de suppression doit être grisé (opacity-50)');
+
+    // Tentative de suppression verrouillée -> bloquée
+    const blockedResult = sandbox.supprimerAbsence(targetId);
+    assert.equal(blockedResult, false);
+    assert.equal(sandbox.__appTestHooks.getAppData().absences.length, initialCount, 'Aucune demande ne doit être supprimée');
+
+    // 2. Clic sur Déverrouiller -> active les boutons et autorise la suppression
+    sandbox.toggleDeleteLock();
+    assert.equal(sandbox.__appTestHooks.isDeleteUnlocked(), true);
+    assert.equal(elementsById.get('delete-lock-icon').textContent, 'lock_open');
+    const unlockedBtn = elementsById.get('historique-list').children[0].children[0];
+    assert.equal(unlockedBtn.disabled, false, 'Le bouton de suppression doit être actif quand déverrouillé');
+
+    const allowedResult = sandbox.supprimerAbsence(targetId);
+    assert.equal(allowedResult, true);
+    assert.equal(sandbox.__appTestHooks.getAppData().absences.length, initialCount - 1, 'La demande est supprimée');
+
+    // 3. Reste déverrouillé jusqu'à ce que l'utilisateur reclique pour verrouiller
+    assert.equal(sandbox.__appTestHooks.isDeleteUnlocked(), true);
+    sandbox.toggleDeleteLock();
+    assert.equal(sandbox.__appTestHooks.isDeleteUnlocked(), false);
 });
 

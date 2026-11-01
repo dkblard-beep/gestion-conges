@@ -282,6 +282,10 @@
                         <span class="material-symbols-outlined text-slate-400">history</span>
                         Historique des demandes
                     </h3>
+                    <button id="btn-toggle-delete-lock" type="button" onclick="toggleDeleteLock()" aria-pressed="false" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 text-xs font-medium transition-colors cursor-pointer">
+                        <span id="delete-lock-icon" class="material-symbols-outlined text-[18px]">lock</span>
+                        <span id="delete-lock-label">Déverrouiller</span>
+                    </button>
                 </div>
 
                 <div class="flex-1 overflow-y-auto pr-2 -mr-2">

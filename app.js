@@ -78,6 +78,9 @@
         DOM.decompteMini        = document.getElementById('decompte-mini');
         DOM.calendarGrid        = document.getElementById('calendar-grid-display');
         DOM.calendarMonthLabel  = document.getElementById('calendar-month-label-display');
+        DOM.btnToggleDeleteLock = document.getElementById('btn-toggle-delete-lock');
+        DOM.deleteLockIcon      = document.getElementById('delete-lock-icon');
+        DOM.deleteLockLabel     = document.getElementById('delete-lock-label');
     }
 
     let appData = AppConfig.createEmptyData();
@@ -87,6 +90,7 @@
     let currentSyncState = 'local'; // 'local' | 'en_cours' | 'reussi' | 'erreur' | 'conflit'
     let pendingConflict = null;     // { localData, remoteData, reason }
     let isSubmittingAbsence = false;
+    let isDeleteUnlocked = false;   // Verrouillé par défaut pour éviter les suppressions accidentelles
     let errorTimeoutId = null;
 
     /**
@@ -841,16 +845,44 @@
         }
     };
 
+    function updateDeleteLockUI() {
+        if (!DOM.btnToggleDeleteLock) return;
+        DOM.btnToggleDeleteLock.setAttribute?.('aria-pressed', String(isDeleteUnlocked));
+
+        if (isDeleteUnlocked) {
+            DOM.btnToggleDeleteLock.className = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-error/20 bg-error-light text-on-error-container text-xs font-semibold transition-colors cursor-pointer';
+            if (DOM.deleteLockIcon) DOM.deleteLockIcon.textContent = 'lock_open';
+            if (DOM.deleteLockLabel) DOM.deleteLockLabel.textContent = 'Verrouiller';
+        } else {
+            DOM.btnToggleDeleteLock.className = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 text-xs font-medium transition-colors cursor-pointer';
+            if (DOM.deleteLockIcon) DOM.deleteLockIcon.textContent = 'lock';
+            if (DOM.deleteLockLabel) DOM.deleteLockLabel.textContent = 'Déverrouiller';
+        }
+    }
+
+    root.toggleDeleteLock = function () {
+        isDeleteUnlocked = !isDeleteUnlocked;
+        updateDeleteLockUI();
+        renderHistorique();
+        return isDeleteUnlocked;
+    };
+
     root.supprimerAbsence = function (id) {
+        if (!isDeleteUnlocked) {
+            showError("Suppression verrouillée : cliquez d'abord sur « Déverrouiller ».");
+            return false;
+        }
         appData.absences = appData.absences.filter(a => a.id !== Number(id));
         sauvegarderDonneesCloud();
         updateSelectors();
         root.mettreAJourAffichage();
         root.mettreAJourApercuAbsence();
+        return true;
     };
 
     // ─── Historique branché sur AppEngine ───
     function renderHistorique() {
+        updateDeleteLockUI();
         if (!DOM.historiqueList || !DOM.historiqueVide) return;
         DOM.historiqueList.innerHTML = '';
 
@@ -866,6 +898,13 @@
             const db = AppEngine.parseLocalDate(b.date) || new Date(0);
             return db - da;
         });
+
+        const deleteBtnClass = isDeleteUnlocked
+            ? 'text-on-surface-variant hover:text-error transition-colors p-2 rounded-full hover:bg-error-container cursor-pointer'
+            : 'text-slate-400 opacity-50 p-2 rounded-full';
+        const deleteBtnTitle = isDeleteUnlocked
+            ? 'Supprimer cette demande'
+            : 'Suppression verrouillée — cliquez sur Déverrouiller';
 
         tries.forEach(a => {
             const expanded = AppEngine.expandAbsenceDays(a, feriesOpts);
@@ -911,13 +950,15 @@
                     </div>
                 </div>
                 <div class="flex flex-col items-end gap-1">
-                    <button type="button" class="text-on-surface-variant hover:text-error transition-colors p-2 rounded-full hover:bg-error-container" aria-label="Supprimer">
+                    <button type="button" ${isDeleteUnlocked ? '' : 'disabled'} title="${deleteBtnTitle}" class="${deleteBtnClass}" aria-label="Supprimer">
                         <span class="material-symbols-outlined text-[20px]">delete</span>
                     </button>
                 </div>
             `;
 
             const deleteBtn = item.querySelector('button');
+            deleteBtn.disabled = !isDeleteUnlocked;
+            deleteBtn.className = deleteBtnClass;
             deleteBtn.addEventListener('click', () => root.supprimerAbsence(a.id));
 
             DOM.historiqueList.appendChild(item);
@@ -968,7 +1009,8 @@
         },
         getSyncState: () => currentSyncState,
         getPendingConflict: () => pendingConflict,
-        getCurrentPeriods: () => ({ cp: currentCPPeriod, rtt: currentRTTPeriod })
+        getCurrentPeriods: () => ({ cp: currentCPPeriod, rtt: currentRTTPeriod }),
+        isDeleteUnlocked: () => isDeleteUnlocked
     };
 
     if (typeof document !== 'undefined') {
