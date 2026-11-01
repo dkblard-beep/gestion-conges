@@ -1,8 +1,11 @@
-const CACHE_NAME = 'conges-pwa-cache-v12'; // Incrémenter la version force la mise à jour du cache
+const CACHE_PREFIX = 'conges-pwa-cache-';
+const CACHE_NAME = `${CACHE_PREFIX}v13`; // Incrémenter la version met à jour le cache de l'application
 const URLS_TO_CACHE = [
   './',
   './index.html',
   './style.css',
+  './config.js',
+  './engine.js',
   './app.js',
   './manifest.json',
   'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap'
@@ -15,22 +18,19 @@ self.addEventListener('install', event => {
         return cache.addAll(URLS_TO_CACHE);
       })
   );
-  self.skipWaiting();
+  // Pas de rechargement forcé des clients actifs pendant une saisie
 });
 
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(cacheNames => {
       return Promise.all(
-        cacheNames.map(cacheName => {
-          if (cacheName !== CACHE_NAME) {
-            return caches.delete(cacheName);
-          }
-        })
+        cacheNames
+          .filter(cacheName => cacheName.startsWith(CACHE_PREFIX) && cacheName !== CACHE_NAME)
+          .map(cacheName => caches.delete(cacheName))
       );
     })
   );
-  self.clients.claim();
 });
 
 self.addEventListener('fetch', event => {
@@ -38,7 +38,7 @@ self.addEventListener('fetch', event => {
   if (event.request.url.includes('script.google.com')) {
     return;
   }
-  
+
   event.respondWith(
     caches.match(event.request)
       .then(response => {

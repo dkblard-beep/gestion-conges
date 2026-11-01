@@ -16,9 +16,13 @@
     <script>
         function toggleAbsenceModal(show) {
             const modal = document.getElementById('form-absence');
+            if (!modal) return;
             if (show) {
                 modal.classList.remove('hidden');
                 modal.classList.add('flex');
+                if (typeof window.mettreAJourApercuAbsence === 'function') {
+                    window.mettreAJourApercuAbsence();
+                }
             } else {
                 modal.classList.add('hidden');
                 modal.classList.remove('flex');
@@ -36,9 +40,9 @@
             </div>
             <div>
                 <h1 class="font-bold text-slate-900 leading-tight">Suivi Congés</h1>
-                <div class="flex items-center gap-1.5 mt-0.5">
-                    <span class="w-1.5 h-1.5 rounded-full bg-success"></span>
-                    <span class="text-[10px] font-medium text-slate-500 uppercase tracking-wider">Synchronisé</span>
+                <div class="flex items-center gap-1.5 mt-0.5" id="sync-status-container" aria-live="polite">
+                    <span id="sync-status-dot" class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                    <span id="sync-status-text" class="text-[10px] font-medium text-slate-500 uppercase tracking-wider">Local</span>
                 </div>
             </div>
         </div>
@@ -69,7 +73,7 @@
         <header class="flex justify-between items-center mb-4">
             <h2 class="text-2xl font-bold text-slate-900">Bonjour 👋</h2>
             <div class="flex items-center gap-3">
-                <button onclick="toggleConfig()" class="md:hidden btn-ghost">
+                <button onclick="toggleConfig()" class="md:hidden btn-ghost" aria-label="Paramètres">
                     <span class="material-symbols-outlined">settings</span>
                 </button>
                 <button onclick="toggleAbsenceModal(true)" class="btn-primary">
@@ -78,6 +82,43 @@
                 </button>
             </div>
         </header>
+
+        <!-- BANNIÈRE GLOBALE D'ERREUR / NOTIFICATION (Hors modale, toujours visible) -->
+        <div id="error-message" role="alert" class="hidden mb-6 bg-error-light border border-error/20 text-on-error-container px-4 py-3 rounded-xl items-center justify-between gap-2 text-sm font-medium shadow-sm">
+            <div class="flex items-center gap-2">
+                <span class="material-symbols-outlined text-[18px] text-error">error</span>
+                <span id="error-text"></span>
+            </div>
+            <button onclick="hideError()" class="btn-ghost !p-1 text-on-error-container" aria-label="Fermer l'alerte">
+                <span class="material-symbols-outlined text-[18px]">close</span>
+            </button>
+        </div>
+
+        <!-- BANNIÈRE DE CONFLIT DE SYNCHRONISATION (Choix explicite requis) -->
+        <div id="conflict-banner" role="alert" class="hidden card mb-6 bg-error-light border border-error/20">
+            <div class="flex flex-col gap-3">
+                <div class="flex items-start gap-2">
+                    <span class="material-symbols-outlined text-error text-[20px]">sync_problem</span>
+                    <div>
+                        <h3 class="text-sm font-bold text-on-error-container">Conflit de synchronisation détecté (aucune donnée écrasée)</h3>
+                        <p id="conflict-description" class="text-xs text-slate-700 mt-1">
+                            Les données locales et distantes diffèrent. Les deux versions sont préservées. Choisissez explicitement la version à retenir :
+                        </p>
+                    </div>
+                </div>
+                <div class="flex flex-wrap gap-2 pt-2">
+                    <button id="btn-conflict-keep-local" onclick="resoudreConflit('local')" class="btn-primary text-xs px-3 py-2">
+                        Conserver la version locale
+                    </button>
+                    <button id="btn-conflict-use-remote" onclick="resoudreConflit('remote')" class="btn-secondary text-xs px-3 py-2">
+                        Appliquer la version distante (Cloud)
+                    </button>
+                    <button id="btn-conflict-export" onclick="exporterDonneesJSON()" class="btn-secondary text-xs px-3 py-2">
+                        Exporter sauvegarde JSON
+                    </button>
+                </div>
+            </div>
+        </div>
 
         <!-- RETRAITE DISCRET -->
         <div id="retraite-card" class="mb-8 hidden">
@@ -123,12 +164,18 @@
                 <div class="space-y-4">
                     <h4 class="text-sm font-semibold text-slate-700">Soldes Annuels</h4>
                     <div>
-                        <label class="label">CP (Juin <span id="label-cp-year"></span> - Mai <span id="label-cp-year-next"></span>)</label>
+                        <label class="label" for="init-cp">CP (Juin <span id="label-cp-year"></span> - Mai <span id="label-cp-year-next"></span>)</label>
                         <input type="number" id="init-cp" step="0.5" class="input-field" placeholder="Ex : 25">
                     </div>
                     <div>
-                        <label class="label">RTT (<span id="label-rtt-year"></span>)</label>
+                        <label class="label" for="init-rtt">RTT (<span id="label-rtt-year"></span>)</label>
                         <input type="number" id="init-rtt" step="0.5" class="input-field" placeholder="Ex : 10">
+                    </div>
+                    <div class="pt-2">
+                        <label class="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                            <input type="checkbox" id="init-pentecote-travaille" checked class="rounded border-slate-300">
+                            <span>Lundi de Pentecôte travaillé (journée de solidarité, non férié)</span>
+                        </label>
                     </div>
                 </div>
 
@@ -136,18 +183,21 @@
                 <div class="space-y-4">
                     <h4 class="text-sm font-semibold text-slate-700">Départ à la retraite</h4>
                     <div>
-                        <label class="label">Date légale</label>
+                        <label class="label" for="init-retraite-legal">Date légale</label>
                         <input type="date" id="init-retraite-legal" class="input-field">
                     </div>
                     <div>
-                        <label class="label">Date anticipée (optionnel)</label>
+                        <label class="label" for="init-retraite-anticipe">Date anticipée (optionnel)</label>
                         <input type="date" id="init-retraite-anticipe" class="input-field">
                     </div>
                 </div>
             </div>
 
-            <div class="flex justify-end mt-6 pt-6 border-t border-slate-200">
-                <button onclick="sauvegarderConfig()" class="btn-primary">Enregistrer les paramètres</button>
+            <div class="flex flex-wrap justify-between items-center gap-3 mt-6 pt-6 border-t border-slate-200">
+                <button type="button" onclick="exporterDonneesJSON()" class="btn-secondary text-sm">
+                    Exporter sauvegarde JSON
+                </button>
+                <button type="button" onclick="sauvegarderConfig()" class="btn-primary">Enregistrer les paramètres</button>
             </div>
         </div>
 
@@ -158,26 +208,31 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 
                 <!-- CP Card -->
-                <div class="card relative overflow-hidden group">
-                    <div class="absolute top-0 left-0 w-1 h-full bg-primary rounded-l-2xl"></div>
+                <div class="card relative overflow-hidden group" id="card-cp">
+                    <div class="absolute top-0 left-0 w-1 h-full bg-primary rounded-l-2xl" id="bar-accent-cp"></div>
                     <div class="flex justify-between items-start mb-6">
                         <div class="flex items-center gap-2">
                             <span class="material-symbols-outlined text-primary bg-primary-light p-1.5 rounded-lg text-[20px]">flight_takeoff</span>
                             <span class="font-semibold text-slate-900">Congés Payés</span>
                         </div>
-                        <select id="select-cp-period" onchange="changerPeriodeCP()" class="text-sm bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-slate-600 focus:outline-none focus:border-primary cursor-pointer"></select>
+                        <select id="select-cp-period" onchange="changerPeriodeCP()" aria-label="Période CP" class="text-sm bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-slate-600 focus:outline-none focus:border-primary cursor-pointer"></select>
                     </div>
 
-                    <div class="flex items-end gap-4 mb-6">
+                    <div class="flex items-end gap-4 mb-4">
                         <div class="text-5xl font-bold text-slate-900 tracking-tight" id="solde-cp">0</div>
                         <div class="text-sm font-medium text-slate-500 pb-1">jours<br>restants</div>
                     </div>
 
-                    <!-- Progress Details -->
+                    <!-- Badge explicite en cas de solde négatif -->
+                    <div id="negative-badge-cp" class="hidden mb-4 px-3 py-1.5 rounded-lg bg-error-light border border-error/20 text-on-error-container text-xs font-semibold">
+                        Solde négatif : dépassement du quota CP sur cette période
+                    </div>
+
+                    <!-- Progress Details : Reste / Total explicite -->
                     <div class="space-y-2">
                         <div class="flex justify-between text-xs text-slate-500 font-medium">
-                            <span>Pris: <span id="pris-cp" class="text-slate-700">0</span></span>
-                            <span>Total: <span id="total-cp" class="text-slate-700">0</span></span>
+                            <span>Reste : <strong id="reste-cp-label" class="text-slate-900">0</strong> / Total : <strong id="total-cp" class="text-slate-700">0</strong> j</span>
+                            <span>Pris : <span id="pris-cp" class="text-slate-700">0</span> j (<span id="progress-text-cp">0%</span> restants)</span>
                         </div>
                         <div class="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
                             <div class="h-full bg-primary rounded-full transition-all duration-700 ease-out" id="progress-cp" style="width: 0%"></div>
@@ -186,26 +241,31 @@
                 </div>
 
                 <!-- RTT Card -->
-                <div class="card relative overflow-hidden group">
-                    <div class="absolute top-0 left-0 w-1 h-full bg-success rounded-l-2xl"></div>
+                <div class="card relative overflow-hidden group" id="card-rtt">
+                    <div class="absolute top-0 left-0 w-1 h-full bg-success rounded-l-2xl" id="bar-accent-rtt"></div>
                     <div class="flex justify-between items-start mb-6">
                         <div class="flex items-center gap-2">
                             <span class="material-symbols-outlined text-success bg-success-light p-1.5 rounded-lg text-[20px]">self_improvement</span>
                             <span class="font-semibold text-slate-900">RTT</span>
                         </div>
-                        <select id="select-rtt-period" onchange="changerPeriodeRTT()" class="text-sm bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-slate-600 focus:outline-none focus:border-success cursor-pointer"></select>
+                        <select id="select-rtt-period" onchange="changerPeriodeRTT()" aria-label="Période RTT" class="text-sm bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-slate-600 focus:outline-none focus:border-success cursor-pointer"></select>
                     </div>
 
-                    <div class="flex items-end gap-4 mb-6">
+                    <div class="flex items-end gap-4 mb-4">
                         <div class="text-5xl font-bold text-slate-900 tracking-tight" id="solde-rtt">0</div>
                         <div class="text-sm font-medium text-slate-500 pb-1">jours<br>restants</div>
                     </div>
 
-                    <!-- Progress Details -->
+                    <!-- Badge explicite en cas de solde négatif -->
+                    <div id="negative-badge-rtt" class="hidden mb-4 px-3 py-1.5 rounded-lg bg-error-light border border-error/20 text-on-error-container text-xs font-semibold">
+                        Solde négatif : dépassement du quota RTT sur cette période
+                    </div>
+
+                    <!-- Progress Details : Reste / Total explicite -->
                     <div class="space-y-2">
                         <div class="flex justify-between text-xs text-slate-500 font-medium">
-                            <span>Pris: <span id="pris-rtt" class="text-slate-700">0</span></span>
-                            <span>Total: <span id="total-rtt" class="text-slate-700">0</span></span>
+                            <span>Reste : <strong id="reste-rtt-label" class="text-slate-900">0</strong> / Total : <strong id="total-rtt" class="text-slate-700">0</strong> j</span>
+                            <span>Pris : <span id="pris-rtt" class="text-slate-700">0</span> j (<span id="progress-text-rtt">0%</span> restants)</span>
                         </div>
                         <div class="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
                             <div class="h-full bg-success rounded-full transition-all duration-700 ease-out" id="progress-rtt" style="width: 0%"></div>
@@ -214,8 +274,6 @@
                 </div>
 
             </div>
-
-
 
             <!-- HISTORY -->
             <div class="card flex flex-col h-[500px]">
@@ -249,21 +307,21 @@
                     Planning Annuel
                 </h3>
                 <div class="flex items-center gap-4">
-                    <button onclick="changeMonth(-1)" class="btn-ghost bg-slate-50 border border-slate-200">
+                    <button onclick="changeMonth(-1)" class="btn-ghost bg-slate-50 border border-slate-200" aria-label="Mois précédent">
                         <span class="material-symbols-outlined">chevron_left</span>
                     </button>
                     <span id="calendar-month-label-display" class="font-semibold text-slate-700 min-w-[120px] text-center capitalize">--</span>
-                    <button onclick="changeMonth(1)" class="btn-ghost bg-slate-50 border border-slate-200">
+                    <button onclick="changeMonth(1)" class="btn-ghost bg-slate-50 border border-slate-200" aria-label="Mois suivant">
                         <span class="material-symbols-outlined">chevron_right</span>
                     </button>
                 </div>
             </div>
 
-            <!-- Légende -->
-            <div class="flex gap-4 mb-4 text-xs font-medium text-slate-500 shrink-0 border-b border-slate-100 pb-4">
-                <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-primary"></span> CP</div>
-                <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-success"></span> RTT</div>
-                <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded bg-error-light border border-error/20"></span> Férié</div>
+            <!-- Légende accompagnée de texte explicite -->
+            <div class="flex flex-wrap gap-4 mb-4 text-xs font-medium text-slate-500 shrink-0 border-b border-slate-100 pb-4">
+                <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-primary"></span> CP (1j ou ½j)</div>
+                <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-success"></span> RTT (1j ou ½j)</div>
+                <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded bg-error-light border border-error/20"></span> Jour férié chômé</div>
             </div>
 
             <div class="grid grid-cols-7 gap-1 text-center text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 shrink-0">
@@ -271,7 +329,7 @@
             </div>
             
             <div id="calendar-grid-display" class="grid grid-cols-7 gap-1 flex-1 overflow-y-auto content-start">
-                <!-- JS injonctions -->
+                <!-- JS injections -->
             </div>
         </div>
 
@@ -280,7 +338,7 @@
     <!-- ABSENCE MODAL -->
     <div id="form-absence" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden items-center justify-center p-4 transition-opacity">
         <div class="card w-full max-w-md bg-white border border-slate-200 shadow-2xl relative">
-            <button onclick="toggleAbsenceModal(false)" class="absolute top-4 right-4 btn-ghost !p-1 text-slate-400 hover:text-slate-900">
+            <button onclick="toggleAbsenceModal(false)" class="absolute top-4 right-4 btn-ghost !p-1 text-slate-400 hover:text-slate-900" aria-label="Fermer">
                 <span class="material-symbols-outlined">close</span>
             </button>
             <h3 class="text-xl font-bold text-slate-900 mb-6 flex items-center gap-2">
@@ -290,33 +348,44 @@
             
             <div class="space-y-5">
                 <div>
-                    <label class="label">Type de congé</label>
-                    <select id="type-absence" class="input-field">
+                    <label class="label" for="type-absence">Type de congé</label>
+                    <select id="type-absence" onchange="mettreAJourApercuAbsence()" class="input-field">
                         <option value="CP">Congé Payé (CP)</option>
                         <option value="RTT">RTT</option>
                     </select>
                 </div>
                 <div>
-                    <label class="label">Date de début</label>
-                    <input type="date" id="date-debut" class="input-field">
+                    <label class="label" for="date-debut">Date de début</label>
+                    <input type="date" id="date-debut" oninput="mettreAJourApercuAbsence()" onchange="mettreAJourApercuAbsence()" class="input-field">
                 </div>
                 <div>
-                    <label class="label">Durée (jours)</label>
-                    <input type="number" id="duree-absence" step="0.5" min="0.5" value="1" class="input-field">
+                    <label class="label" for="duree-absence">Durée (jours ouvrés, pas de 0,5)</label>
+                    <input type="number" id="duree-absence" step="0.5" min="0.5" value="1" oninput="mettreAJourApercuAbsence()" onchange="mettreAJourApercuAbsence()" class="input-field">
                 </div>
-                <div class="pt-4">
-                    <button onclick="ajouterAbsence(); toggleAbsenceModal(false);" class="btn-primary w-full">Enregistrer</button>
-                </div>
-            </div>
 
-            <!-- Toast Error -->
-            <div id="error-message" class="hidden mt-4 bg-error-light border border-error/20 text-error px-4 py-3 rounded-xl flex items-center gap-2 text-sm font-medium">
-                <span class="material-symbols-outlined text-[18px]">error</span>
-                <span id="error-text"></span>
+                <!-- Aperçu dynamique calculé par engine.js sans enregistrer -->
+                <div id="absence-preview" class="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1.5">
+                    <div id="preview-dates" class="font-semibold text-slate-900">--</div>
+                    <div id="preview-shift" class="hidden text-primary font-medium"></div>
+                    <div id="preview-balance" class="text-slate-600">--</div>
+                    <div id="preview-negative-warning" class="hidden px-2 py-1 rounded bg-error-light border border-error/20 text-on-error-container font-semibold"></div>
+                </div>
+
+                <!-- Erreur interne à la modale (conserve la modale ouverte) -->
+                <div id="modal-error-message" role="alert" class="hidden bg-error-light border border-error/20 text-on-error-container px-4 py-3 rounded-xl items-center gap-2 text-sm font-medium">
+                    <span class="material-symbols-outlined text-[18px] text-error">error</span>
+                    <span id="modal-error-text"></span>
+                </div>
+
+                <div class="pt-2">
+                    <button id="btn-submit-absence" type="button" onclick="ajouterAbsence()" class="btn-primary w-full">Enregistrer</button>
+                </div>
             </div>
         </div>
     </div>
 
+    <script src="config.js"></script>
+    <script src="engine.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
