@@ -105,6 +105,16 @@
             </button>
         </div>
 
+        <div id="opening-reminder-banner" role="status" class="hidden mb-6 bg-primary-light border border-primary/30 text-on-primary-container px-4 py-3 rounded-xl items-center justify-between gap-3 text-sm font-medium shadow-sm">
+            <div class="flex items-center gap-2">
+                <span class="material-symbols-outlined text-[18px] text-primary">notifications_active</span>
+                <span id="opening-reminder-text"></span>
+            </div>
+            <button id="btn-close-reminder" type="button" onclick="fermerRappelOuverture()" class="btn-ghost !p-1 text-on-primary-container" aria-label="Fermer le rappel">
+                <span class="material-symbols-outlined text-[18px]">close</span>
+            </button>
+        </div>
+
         <!-- BANNIÈRE DE CONFLIT DE SYNCHRONISATION (Choix explicite requis) -->
         <div id="conflict-banner" role="alert" class="hidden card mb-6 bg-error-light border border-error/20">
             <div class="flex flex-col gap-3">
@@ -221,6 +231,30 @@
                                 </select>
                             </div>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Rappel de solde à l'ouverture & Export calendrier .ics (Lot E #2 & #4) -->
+            <div class="mt-6 pt-6 border-t border-slate-200 space-y-3">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div class="space-y-1">
+                        <h4 class="text-sm font-semibold text-slate-700">Rappel du solde à l'ouverture & Export Calendrier (.ics)</h4>
+                        <label class="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+                            <input type="checkbox" id="init-rappel-ouverture" class="rounded border-slate-300">
+                            <span>Afficher un rappel de mes soldes CP/RTT à l'ouverture de l'application</span>
+                        </label>
+                        <p id="notif-permission-status" class="text-xs text-slate-500">Sans serveur push, le rappel s'affiche uniquement à l'ouverture de l'appli (notification navigateur ou bannière de repli non bloquante).</p>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <button id="btn-demander-permission-notif" type="button" onclick="activerNotificationsRappel()" class="btn-secondary text-xs">
+                            <span class="material-symbols-outlined text-[16px]">notifications</span>
+                            Autoriser notifications navigateur
+                        </button>
+                        <button id="btn-export-ics-config" type="button" onclick="exporterCalendrierICS()" class="btn-secondary text-xs">
+                            <span class="material-symbols-outlined text-[16px]">calendar_add_on</span>
+                            Exporter calendrier (.ics)
+                        </button>
                     </div>
                 </div>
             </div>
@@ -426,6 +460,45 @@
                 </div>
             </div>
 
+            <!-- STATISTIQUES ANNUELLES (Lot E #1) -->
+            <div id="stats-annuelles-section" class="card space-y-4">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <h3 class="font-bold text-slate-900 flex items-center gap-2">
+                        <span class="material-symbols-outlined text-primary">bar_chart</span>
+                        Statistiques annuelles (<span id="stats-year-label">2026</span>)
+                    </h3>
+                    <button id="btn-export-ics-dashboard" type="button" onclick="exporterCalendrierICS()" class="btn-secondary !py-1.5 !px-3 text-xs">
+                        <span class="material-symbols-outlined text-[16px]">download</span>
+                        Exporter .ics
+                    </button>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                    <div class="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                        <div class="text-slate-500 font-medium">Taux d'utilisation global</div>
+                        <div id="stats-taux-global" class="text-lg font-bold text-slate-900 mt-0.5">0%</div>
+                        <div id="stats-taux-detail" class="text-slate-600 mt-0.5">CP : 0% • RTT : 0%</div>
+                    </div>
+                    <div class="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                        <div class="text-slate-500 font-medium">Mois le plus chargé</div>
+                        <div id="stats-mois-plus-charge" class="text-lg font-bold text-slate-900 mt-0.5">Aucun</div>
+                        <div id="stats-mois-plus-charge-detail" class="text-slate-600 mt-0.5">0 jour posé</div>
+                    </div>
+                    <div class="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                        <div class="text-slate-500 font-medium">Total posé sur l'année</div>
+                        <div id="stats-total-annee" class="text-lg font-bold text-slate-900 mt-0.5">0 j</div>
+                        <div id="stats-total-annee-detail" class="text-slate-600 mt-0.5">0 j CP • 0 j RTT</div>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="text-xs font-semibold text-slate-600 mb-2">Répartition mensuelle CP / RTT (ventilation jour par jour)</div>
+                    <div id="stats-mensuelles-grid" class="grid grid-cols-3 sm:grid-cols-6 lg:grid-cols-12 gap-2 text-center text-xs">
+                        <!-- Injecté via JS -->
+                    </div>
+                </div>
+            </div>
+
             <!-- HISTORY -->
             <div class="card flex flex-col h-[500px]">
                 <div class="flex flex-wrap items-center justify-between gap-3 mb-4 shrink-0">
@@ -472,6 +545,10 @@
                     Planning Annuel
                 </h3>
                 <div class="flex items-center gap-4">
+                    <button id="btn-export-ics" type="button" onclick="exporterCalendrierICS()" class="btn-secondary !py-1.5 !px-3 text-xs">
+                        <span class="material-symbols-outlined text-[16px]">download</span>
+                        Exporter .ics
+                    </button>
                     <button onclick="changeMonth(-1)" class="btn-ghost bg-slate-50 border border-slate-200" aria-label="Mois précédent">
                         <span class="material-symbols-outlined">chevron_left</span>
                     </button>

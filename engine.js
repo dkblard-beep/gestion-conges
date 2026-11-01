@@ -1088,6 +1088,165 @@
         return suggestions;
     }
 
+    const MOIS_LABELS_COURTS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'];
+    const MOIS_NOMS_COMPLETS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+
+    /**
+     * Calcule les statistiques annuelles (Lot E #1) :
+     * - Ventilation jour par jour (via `expandAbsenceDays`) pour tout congé qui chevauche deux mois ou deux années.
+     * - Répartition mensuelle CP / RTT (12 mois de l'année cible `year`).
+     * - Mois le plus chargé (`moisPlusCharge` : mois ayant le total `cp + rtt` le plus élevé, ou `null` si 0 jour posé).
+     * - Taux d'utilisation (`tauxUtilisationCP`, `tauxUtilisationRTT`, `tauxUtilisationGlobal`).
+     *
+     * @param {Object} appData
+     * @param {number|string} [year]
+     * @param {Object} [options={}]
+     */
+    function calculerStatistiquesAnnuelles(appData, year = new Date().getFullYear(), options = {}) {
+        const targetYear = Number(year) || new Date().getFullYear();
+        const yearStr = String(targetYear);
+        const cpPeriod = String(options.cpPeriod || yearStr);
+        const rttPeriod = String(options.rttPeriod || yearStr);
+
+        const repartitionMensuelle = MOIS_LABELS_COURTS.map((label, idx) => ({
+            mois: idx + 1,
+            label,
+            nomComplet: MOIS_NOMS_COMPLETS[idx],
+            cp: 0,
+            rtt: 0,
+            total: 0
+        }));
+
+        const absences = Array.isArray(appData?.absences) ? appData.absences : [];
+        let totalCPAnnee = 0;
+        let totalRTTAnnee = 0;
+
+        for (const a of absences) {
+            const expanded = expandAbsenceDays(a, options);
+            for (const d of expanded.days) {
+                const dayYear = Number(d.date.slice(0, 4));
+                if (dayYear !== targetYear) continue;
+                const monthIdx = Number(d.date.slice(5, 7)) - 1;
+                if (monthIdx < 0 || monthIdx > 11) continue;
+
+                const bucket = repartitionMensuelle[monthIdx];
+                if (a.type === 'CP') {
+                    bucket.cp = Math.round((bucket.cp + d.weight) * 100) / 100;
+                    totalCPAnnee = Math.round((totalCPAnnee + d.weight) * 100) / 100;
+                } else if (a.type === 'RTT') {
+                    bucket.rtt = Math.round((bucket.rtt + d.weight) * 100) / 100;
+                    totalRTTAnnee = Math.round((totalRTTAnnee + d.weight) * 100) / 100;
+                }
+                bucket.total = Math.round((bucket.cp + bucket.rtt) * 100) / 100;
+            }
+        }
+
+        const totalAnnee = Math.round((totalCPAnnee + totalRTTAnnee) * 100) / 100;
+
+        let moisPlusCharge = null;
+        for (const m of repartitionMensuelle) {
+            if (m.total > 0 && (!moisPlusCharge || m.total > moisPlusCharge.total)) {
+                moisPlusCharge = { ...m };
+            }
+        }
+
+        const soldes = calculerSoldes(appData || {}, cpPeriod, rttPeriod, options);
+        const initCP = soldes.initCP;
+        const prisCP = soldes.prisCP;
+        const initRTT = soldes.initRTT;
+        const prisRTT = soldes.prisRTT;
+        const totalInitial = Math.round((initCP + initRTT) * 100) / 100;
+        const totalPrisPeriode = Math.round((prisCP + prisRTT) * 100) / 100;
+
+        const tauxUtilisationCP = initCP > 0 ? Math.round((prisCP / initCP) * 100) : 0;
+        const tauxUtilisationRTT = initRTT > 0 ? Math.round((prisRTT / initRTT) * 100) : 0;
+        const tauxUtilisationGlobal = totalInitial > 0 ? Math.round((totalPrisPeriode / totalInitial) * 100) : 0;
+
+        return {
+            year: targetYear,
+            cpPeriod,
+            rttPeriod,
+            repartitionMensuelle,
+            moisPlusCharge,
+            totalCPAnnee,
+            totalRTTAnnee,
+            totalAnnee,
+            initCP,
+            prisCP,
+            initRTT,
+            prisRTT,
+            totalInitial,
+            totalPrisPeriode,
+            tauxUtilisationCP,
+            tauxUtilisationRTT,
+            tauxUtilisationGlobal
+        };
+    }
+
+    function formatDateICS(dateStrOrObj) {
+        const d = dateStrOrObj instanceof Date ? dateStrOrObj : parseLocalDate(dateStrOrObj);
+        if (!d) return '';
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}${m}${day}`;
+    }
+
+    function addLocalDays(dateStrOrObj, daysToAdd) {
+        const d = dateStrOrObj instanceof Date ? dateStrOrObj : parseLocalDate(dateStrOrObj);
+        if (!d) return null;
+        return new Date(d.getFullYear(), d.getMonth(), d.getDate() + Number(daysToAdd), 0, 0, 0, 0);
+    }
+
+    /**
+     * Génère un export calendrier `.ics` conforme RFC 5545 en JS pur (Lot E #2, #3, #5) :
+     * - `DTSTART;VALUE=DATE:YYYYMMDD` = premier jour ouvré effectif (`effectiveStartDate`).
+     * - `DTEND;VALUE=DATE:YYYYMMDD` = jour suivant le dernier jour ouvré effectif (`endDate + 1 jour`, exclusif selon RFC 5545).
+     * - Un congé traversant un week-end ou un jour férié produit UN SEUL événement (`VEVENT`) couvrant la plage réelle, pas un événement par jour.
+     *
+     * @param {Object} appData
+     * @param {Object} [options={}]
+     * @returns {string}
+     */
+    function genererExportICS(appData, options = {}) {
+        const absences = Array.isArray(appData?.absences) ? [...appData.absences] : [];
+        absences.sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
+
+        const dtstamp = options.dtstamp || '20260101T000000Z';
+        const lines = [
+            'BEGIN:VCALENDAR',
+            'VERSION:2.0',
+            'PRODID:-//Suivi Conges RTT//FR',
+            'CALSCALE:GREGORIAN',
+            'METHOD:PUBLISH'
+        ];
+
+        for (const a of absences) {
+            const expanded = expandAbsenceDays(a, options);
+            if (!expanded.days || expanded.days.length === 0) continue;
+
+            const dtStart = formatDateICS(expanded.effectiveStartDate);
+            const exclusiveEndDate = addLocalDays(expanded.endDate, 1);
+            const dtEnd = formatDateICS(exclusiveEndDate);
+            const dureeStr = a.duree % 1 === 0 ? String(a.duree) : a.duree.toFixed(1);
+            const uid = `absence-${a.id || dtStart}-${a.type}@suivi-conges-rtt.local`;
+
+            lines.push(
+                'BEGIN:VEVENT',
+                `UID:${uid}`,
+                `DTSTAMP:${dtstamp}`,
+                `DTSTART;VALUE=DATE:${dtStart}`,
+                `DTEND;VALUE=DATE:${dtEnd}`,
+                `SUMMARY:${a.type} (${dureeStr} j)`,
+                `DESCRIPTION:Congé ${a.type} de ${dureeStr} jour(s) ouvré(s) du ${expanded.effectiveStartDate} au ${expanded.endDate}`,
+                'END:VEVENT'
+            );
+        }
+
+        lines.push('END:VCALENDAR');
+        return lines.join('\r\n') + '\r\n';
+    }
+
     return {
         parseLocalDate,
         formatLocalDate,
@@ -1111,7 +1270,9 @@
         calculerAlertesExpiration,
         filtrerAbsencesHistorique,
         simulerAbsence,
-        suggererPonts
+        suggererPonts,
+        calculerStatistiquesAnnuelles,
+        genererExportICS
     };
 });
 

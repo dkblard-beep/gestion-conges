@@ -608,6 +608,101 @@ test('Lot C (Correctif #4) : une plage de dates incluant un week-end ou un féri
     assert.equal(sim.soldeRestantPrincipal, 25, '29 - 4 = 25 jours de CP restants');
 });
 
+test('Lot E (#1) : calculerStatistiquesAnnuelles calcule la répartition mensuelle CP/RTT, le mois le plus chargé et le taux d’utilisation depuis le snapshot de non-régression, avec ventilation jour par jour sur deux mois', () => {
+    const realSnapshot = {
+        absences: [
+            { id: 1790412079086, type: 'CP', date: '2026-10-05', duree: 5 },
+            { id: 1790412095516, type: 'CP', date: '2026-08-03', duree: 10 },
+            { id: 1790970282472, type: 'RTT', date: '2026-09-25', duree: 1 },
+            { id: 1791001510220, type: 'RTT', date: '2026-07-13', duree: 1 },
+            { id: 1791001615916, type: 'RTT', date: '2026-05-15', duree: 1 },
+            { id: 1791001638651, type: 'RTT', date: '2026-05-25', duree: 1 },
+            { id: 1793543141050, type: 'RTT', date: '2026-11-12', duree: 2 }
+        ],
+        configCP: { '2026': 29 },
+        configRTT: { '2026': 12 }
+    };
+
+    const stats = AppEngine.calculerStatistiquesAnnuelles(realSnapshot, 2026);
+    assert.equal(stats.year, 2026);
+    assert.equal(stats.repartitionMensuelle.length, 12);
+
+    // Vérification mois par mois sur le snapshot de non-régression :
+    // Mai (mois 5, idx 4) : 2 RTT ; Juillet (mois 7, idx 6) : 1 RTT ; Août (mois 8, idx 7) : 10 CP ;
+    // Septembre (mois 9, idx 8) : 1 RTT ; Octobre (mois 10, idx 9) : 5 CP ; Novembre (mois 11, idx 10) : 2 RTT
+    assert.equal(stats.repartitionMensuelle[4].rtt, 2);
+    assert.equal(stats.repartitionMensuelle[6].rtt, 1);
+    assert.equal(stats.repartitionMensuelle[7].cp, 10);
+    assert.equal(stats.repartitionMensuelle[8].rtt, 1);
+    assert.equal(stats.repartitionMensuelle[9].cp, 5);
+    assert.equal(stats.repartitionMensuelle[10].rtt, 2);
+
+    // Mois le plus chargé = Août (10 jours)
+    assert.ok(stats.moisPlusCharge);
+    assert.equal(stats.moisPlusCharge.mois, 8);
+    assert.equal(stats.moisPlusCharge.nomComplet, 'août');
+    assert.equal(stats.moisPlusCharge.total, 10);
+
+    // Taux d'utilisation : CP = 15/29 (52%), RTT = 6/12 (50%), Global = 21/41 (51%)
+    assert.equal(stats.totalCPAnnee, 15);
+    assert.equal(stats.totalRTTAnnee, 6);
+    assert.equal(stats.totalAnnee, 21);
+    assert.equal(stats.tauxUtilisationCP, 52);
+    assert.equal(stats.tauxUtilisationRTT, 50);
+    assert.equal(stats.tauxUtilisationGlobal, 51);
+
+    // Ventilation jour par jour pour un congé qui chevauche deux mois :
+    // Du jeudi 30 juillet 2026 pour 4 jours ouvrés (jeu 30/07, ven 31/07, lun 03/08, mar 04/08)
+    // -> 2 jours en juillet (mois 7) et 2 jours en août (mois 8)
+    const crossMonthData = {
+        absences: [
+            { id: 1, type: 'CP', date: '2026-07-30', duree: 4 }
+        ],
+        configCP: { '2026': 20 },
+        configRTT: { '2026': 10 }
+    };
+    const crossStats = AppEngine.calculerStatistiquesAnnuelles(crossMonthData, 2026);
+    assert.equal(crossStats.repartitionMensuelle[6].cp, 2, '2 jours ouvrés ventilés sur juillet (30/07 et 31/07)');
+    assert.equal(crossStats.repartitionMensuelle[7].cp, 2, '2 jours ouvrés ventilés sur août (03/08 et 04/08)');
+    assert.equal(crossStats.totalCPAnnee, 4);
+});
+
+test('Lot E (#2 & #3) : genererExportICS respecte RFC 5545 (DTSTART premier jour effectif, DTEND exclusif au lendemain, et un seul VEVENT pour un congé traversant un week-end)', () => {
+    const sampleData = {
+        absences: [
+            // 1. Congé de 1 jour le vendredi 15/05/2026 -> DTSTART:20260515, DTEND exclusif:20260516
+            { id: 101, type: 'RTT', date: '2026-05-15', duree: 1 },
+            // 2. Congé de 10 jours ouvrés du lundi 03/08/2026 au vendredi 14/08/2026 (traverse le week-end des 08-09/08)
+            // -> DOIT produire un seul VEVENT avec DTSTART:20260803 et DTEND exclusif:20260815
+            { id: 102, type: 'CP', date: '2026-08-03', duree: 10 }
+        ],
+        configCP: { '2026': 29 },
+        configRTT: { '2026': 12 }
+    };
+
+    const ics = AppEngine.genererExportICS(sampleData, { dtstamp: '20261101T120000Z' });
+
+    assert.match(ics, /^BEGIN:VCALENDAR\r\n/);
+    assert.match(ics, /VERSION:2\.0\r\n/);
+    assert.match(ics, /END:VCALENDAR\r\n$/);
+
+    // Compte le nombre d'événements VEVENT : il doit y en avoir exactement 2 (un par absence, pas un par jour ouvré)
+    const veventMatches = ics.match(/BEGIN:VEVENT/g) || [];
+    assert.equal(veventMatches.length, 2, 'Un congé traversant un week-end doit produire un seul VEVENT couvrant la plage réelle');
+
+    // Vérifie le RTT d'1 jour (15/05/2026 -> DTEND exclusif 16/05/2026)
+    assert.match(
+        ics,
+        /UID:absence-101-RTT@suivi-conges-rtt\.local\r\nDTSTAMP:20261101T120000Z\r\nDTSTART;VALUE=DATE:20260515\r\nDTEND;VALUE=DATE:20260516\r\nSUMMARY:RTT \(1 j\)/
+    );
+
+    // Vérifie le CP de 10 jours traversant un week-end (du 03/08/2026 au 14/08/2026 inclus -> DTEND exclusif 20260815)
+    assert.match(
+        ics,
+        /UID:absence-102-CP@suivi-conges-rtt\.local\r\nDTSTAMP:20261101T120000Z\r\nDTSTART;VALUE=DATE:20260803\r\nDTEND;VALUE=DATE:20260815\r\nSUMMARY:CP \(10 j\)/
+    );
+});
+
 
 
 

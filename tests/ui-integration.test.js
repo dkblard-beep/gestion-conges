@@ -409,7 +409,7 @@ test('Service Worker (sw.js) : inclut config.js et engine.js et ne supprime que 
                 addAll: async (urls) => { addedUrls.push(...urls); },
                 put: async () => {}
             }),
-            keys: async () => ['conges-pwa-cache-v12', 'conges-pwa-cache-v18', 'autre-app-cache-v1'],
+            keys: async () => ['conges-pwa-cache-v12', 'conges-pwa-cache-v19', 'autre-app-cache-v1'],
             delete: async (name) => { deletedCaches.push(name); return true; },
             match: async () => null
         },
@@ -903,6 +903,49 @@ test('Lot D (Correctif critique #1, #2, #3) : thème forcé "light" alors que le
     assert.equal(document.documentElement.classList.contains('dark'), false, 'Auto + OS clair -> .dark inactif');
     mediaQueryListMock.triggerSystemChange(true);
     assert.equal(document.documentElement.classList.contains('dark'), true, 'Auto + OS basculé en sombre -> .dark actif');
+});
+
+test('Lot E (UI) : affichage des statistiques annuelles sur le snapshot, export .ics et rappel à l’ouverture avec demande explicite et repli gracieux si permission refusée', async () => {
+    const { sandbox, elementsById } = createAppSandbox({
+        fetchImpl: async () => ({
+            ok: true,
+            json: async () => structuredClone(REAL_USER_DATA)
+        })
+    });
+
+    await sandbox.__appTestHooks.initApp();
+
+    // 1. Statistiques annuelles affichées sur le tableau de bord depuis REAL_USER_DATA
+    assert.equal(elementsById.get('stats-taux-global').textContent, '51%');
+    assert.match(elementsById.get('stats-taux-detail').textContent, /CP : 52%/);
+    assert.match(elementsById.get('stats-taux-detail').textContent, /RTT : 50%/);
+    assert.equal(elementsById.get('stats-mois-plus-charge').textContent, 'Août (10 j)');
+    assert.equal(elementsById.get('stats-total-annee').textContent, '21 j');
+    assert.equal(elementsById.get('stats-mensuelles-grid').children.length, 12);
+
+    // 2. Export .ics depuis l'UI : 7 absences -> 7 VEVENTs, DTEND exclusif pour le CP du 03/08 au 14/08 -> 20260815
+    const icsOutput = sandbox.exporterCalendrierICS({ dtstamp: '20261101T100000Z' });
+    const vevents = icsOutput.match(/BEGIN:VEVENT/g) || [];
+    assert.equal(vevents.length, 7);
+    assert.match(icsOutput, /DTSTART;VALUE=DATE:20260803\r\nDTEND;VALUE=DATE:20260815/);
+
+    // 3. Notifications : demande de permission explicite refusée ('denied') -> repli gracieux non bloquant
+    sandbox.Notification = {
+        permission: 'denied',
+        requestPermission: async () => 'denied'
+    };
+    const permDeniedRes = await sandbox.activerNotificationsRappel();
+    assert.equal(permDeniedRes.permission, 'denied');
+    assert.equal(permDeniedRes.fallback, true);
+    assert.match(elementsById.get('notif-permission-status').textContent, /repli gracieux/i);
+
+    // À l'ouverture suivante de l'application (initApp), la bannière de rappel s'affiche sans bloquer l'application
+    await sandbox.__appTestHooks.initApp();
+    const reminderBanner = elementsById.get('opening-reminder-banner');
+    assert.equal(reminderBanner.classList.contains('hidden'), false, 'Le rappel de solde est affiché à l’ouverture en repli gracieux');
+    assert.match(elementsById.get('opening-reminder-text').textContent, /14 j de CP/);
+    assert.match(elementsById.get('opening-reminder-text').textContent, /6 j de RTT/);
+    assert.equal(elementsById.get('solde-cp').textContent, '14', 'L’application n’est jamais bloquée');
 });
 
 

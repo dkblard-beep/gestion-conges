@@ -29,7 +29,8 @@
     const DEFAULT_ALERT_OPTIONS = Object.freeze({
         seuilAlerteJours: 60,
         echeanceReportCP: '05-31',
-        theme: 'auto'
+        theme: 'auto',
+        rappelOuvertureActif: false
     });
 
     /**
@@ -65,7 +66,8 @@
         return {
             seuilAlerteJours,
             echeanceReportCP,
-            theme
+            theme,
+            rappelOuvertureActif: Boolean(customPrefs && customPrefs.rappelOuvertureActif)
         };
     }
 

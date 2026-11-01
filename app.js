@@ -117,6 +117,18 @@
         DOM.bridgesYearLabel    = document.getElementById('bridges-year-label');
         DOM.bridgesList         = document.getElementById('bridges-list');
         DOM.bridgesEmpty        = document.getElementById('bridges-empty');
+        DOM.initRappelOuverture = document.getElementById('init-rappel-ouverture');
+        DOM.notifPermissionStatus = document.getElementById('notif-permission-status');
+        DOM.openingReminderBanner = document.getElementById('opening-reminder-banner');
+        DOM.openingReminderText = document.getElementById('opening-reminder-text');
+        DOM.statsYearLabel      = document.getElementById('stats-year-label');
+        DOM.statsTauxGlobal     = document.getElementById('stats-taux-global');
+        DOM.statsTauxDetail     = document.getElementById('stats-taux-detail');
+        DOM.statsMoisPlusCharge = document.getElementById('stats-mois-plus-charge');
+        DOM.statsMoisPlusChargeDetail = document.getElementById('stats-mois-plus-charge-detail');
+        DOM.statsTotalAnnee     = document.getElementById('stats-total-annee');
+        DOM.statsTotalAnneeDetail = document.getElementById('stats-total-annee-detail');
+        DOM.statsMensuellesGrid = document.getElementById('stats-mensuelles-grid');
     }
 
     let appData = AppConfig.createEmptyData();
@@ -608,6 +620,7 @@
         updateSelectors();
         root.mettreAJourAffichage();
         root.mettreAJourApercuAbsence();
+        verifierRappelOuverture();
     }
 
     /**
@@ -828,6 +841,9 @@
         }
         if (DOM.initThemeMode) {
             DOM.initThemeMode.value = String(alertPrefs.theme || 'auto');
+        }
+        if (DOM.initRappelOuverture) {
+            DOM.initRappelOuverture.checked = Boolean(alertPrefs.rappelOuvertureActif);
         }
 
         const r = appData.configRetraite || {};
@@ -1051,6 +1067,194 @@
         return suggestions;
     }
 
+    // ─── Statistiques annuelles, Export .ics RFC 5545 & Rappel de solde à l'ouverture (Lot E) ───
+    function renderStatistiquesAnnuelles() {
+        const targetYear = Number(currentRTTPeriod) || Number(currentCPPeriod) || new Date().getFullYear();
+        const stats = AppEngine.calculerStatistiquesAnnuelles(appData, targetYear, {
+            ...getActiveFeriesOptions(),
+            cpPeriod: currentCPPeriod || String(targetYear),
+            rttPeriod: currentRTTPeriod || String(targetYear)
+        });
+
+        if (DOM.statsYearLabel) {
+            DOM.statsYearLabel.textContent = String(stats.year);
+        }
+        if (DOM.statsTauxGlobal) {
+            DOM.statsTauxGlobal.textContent = `${stats.tauxUtilisationGlobal}%`;
+        }
+        if (DOM.statsTauxDetail) {
+            DOM.statsTauxDetail.textContent =
+                `CP : ${stats.tauxUtilisationCP}% (${formatDaysNumber(stats.prisCP)}/${formatDaysNumber(stats.initCP)} j) • RTT : ${stats.tauxUtilisationRTT}% (${formatDaysNumber(stats.prisRTT)}/${formatDaysNumber(stats.initRTT)} j)`;
+        }
+
+        if (DOM.statsMoisPlusCharge) {
+            if (stats.moisPlusCharge) {
+                const nomCap = stats.moisPlusCharge.nomComplet.charAt(0).toUpperCase() + stats.moisPlusCharge.nomComplet.slice(1);
+                DOM.statsMoisPlusCharge.textContent = `${nomCap} (${formatDaysNumber(stats.moisPlusCharge.total)} j)`;
+                if (DOM.statsMoisPlusChargeDetail) {
+                    DOM.statsMoisPlusChargeDetail.textContent =
+                        `${formatDaysNumber(stats.moisPlusCharge.cp)} j CP • ${formatDaysNumber(stats.moisPlusCharge.rtt)} j RTT`;
+                }
+            } else {
+                DOM.statsMoisPlusCharge.textContent = 'Aucun';
+                if (DOM.statsMoisPlusChargeDetail) {
+                    DOM.statsMoisPlusChargeDetail.textContent = '0 jour posé sur l’année';
+                }
+            }
+        }
+
+        if (DOM.statsTotalAnnee) {
+            DOM.statsTotalAnnee.textContent = `${formatDaysNumber(stats.totalAnnee)} j`;
+        }
+        if (DOM.statsTotalAnneeDetail) {
+            DOM.statsTotalAnneeDetail.textContent =
+                `${formatDaysNumber(stats.totalCPAnnee)} j CP • ${formatDaysNumber(stats.totalRTTAnnee)} j RTT`;
+        }
+
+        if (DOM.statsMensuellesGrid) {
+            DOM.statsMensuellesGrid.innerHTML = '';
+            stats.repartitionMensuelle.forEach(m => {
+                const cell = document.createElement('div');
+                cell.dataset.month = String(m.mois);
+                const isBusiest = stats.moisPlusCharge && stats.moisPlusCharge.mois === m.mois;
+                cell.className = isBusiest
+                    ? 'p-2 rounded-xl bg-primary-light border border-primary/30 flex flex-col items-center justify-between gap-1'
+                    : 'p-2 rounded-xl bg-slate-50 border border-slate-200 flex flex-col items-center justify-between gap-1';
+
+                cell.innerHTML = `
+                    <span class="font-bold text-slate-700">${m.label}</span>
+                    <span class="text-sm font-bold text-slate-900">${formatDaysNumber(m.total)} j</span>
+                    <div class="flex flex-col text-[10px] leading-tight text-slate-600">
+                        <span>CP : ${formatDaysNumber(m.cp)}</span>
+                        <span>RTT : ${formatDaysNumber(m.rtt)}</span>
+                    </div>
+                `;
+                DOM.statsMensuellesGrid.appendChild(cell);
+            });
+        }
+
+        return stats;
+    }
+
+    /**
+     * Exporte le calendrier des absences au format .ics conforme RFC 5545 en JS pur (Lot E #2 & #5).
+     */
+    root.exporterCalendrierICS = function (customOptions = {}) {
+        const icsContent = AppEngine.genererExportICS(appData, {
+            ...getActiveFeriesOptions(),
+            ...customOptions
+        });
+
+        if (typeof document !== 'undefined' && typeof Blob !== 'undefined' && typeof URL !== 'undefined' && URL.createObjectURL) {
+            try {
+                const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `conges-rtt-${currentRTTPeriod || new Date().getFullYear()}.ics`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            } catch (e) {
+                console.warn('Téléchargement direct .ics indisponible dans cet environnement.', e);
+            }
+        }
+        return icsContent;
+    };
+
+    root.fermerRappelOuverture = function () {
+        if (DOM.openingReminderBanner) {
+            DOM.openingReminderBanner.classList.add('hidden');
+            DOM.openingReminderBanner.classList.remove('flex');
+        }
+    };
+
+    /**
+     * Demande explicitement la permission de notification navigateur avec repli gracieux non bloquant si refusée (Lot E #4).
+     */
+    root.activerNotificationsRappel = async function () {
+        sauvegarderPreferencesAlertes({ rappelOuvertureActif: true });
+        if (DOM.initRappelOuverture) {
+            DOM.initRappelOuverture.checked = true;
+        }
+
+        const NotifAPI = root.Notification;
+        if (!NotifAPI || typeof NotifAPI.requestPermission !== 'function') {
+            if (DOM.notifPermissionStatus) {
+                DOM.notifPermissionStatus.textContent =
+                    "Notifications système non supportées : le rappel s'affichera via la bannière intégrée à l'ouverture.";
+            }
+            return { supported: false, permission: 'unsupported', fallback: true };
+        }
+
+        try {
+            const permission = await NotifAPI.requestPermission();
+            if (permission === 'granted') {
+                if (DOM.notifPermissionStatus) {
+                    DOM.notifPermissionStatus.textContent =
+                        "Notifications navigateur autorisées : un rappel de solde s'affichera à l'ouverture de l'application.";
+                }
+                return { supported: true, permission: 'granted', fallback: false };
+            }
+            if (DOM.notifPermissionStatus) {
+                DOM.notifPermissionStatus.textContent =
+                    "Permission refusée : repli gracieux activé (le rappel s'affichera dans la bannière d'accueil sans bloquer l'application).";
+            }
+            return { supported: true, permission: permission || 'denied', fallback: true };
+        } catch (_err) {
+            if (DOM.notifPermissionStatus) {
+                DOM.notifPermissionStatus.textContent =
+                    "Permission indisponible : repli gracieux activé dans la bannière d'accueil.";
+            }
+            return { supported: true, permission: 'denied', fallback: true };
+        }
+    };
+
+    /**
+     * Affiche le rappel du solde uniquement à l'ouverture de l'appli (`initApp`),
+     * sans jamais bloquer l'application si la permission est refusée ou absente (Lot E #4).
+     */
+    function verifierRappelOuverture() {
+        if (!alertPrefs || !alertPrefs.rappelOuvertureActif) {
+            root.fermerRappelOuverture();
+            return { shown: false, reason: 'disabled' };
+        }
+
+        const soldes = AppEngine.calculerSoldes(
+            appData,
+            currentCPPeriod,
+            currentRTTPeriod,
+            getActiveFeriesOptions()
+        );
+        const message =
+            `Rappel de vos soldes à l'ouverture : ${formatDaysNumber(soldes.resteCP)} j de CP (${AppEngine.formatCPPeriod(currentCPPeriod)}) et ${formatDaysNumber(soldes.resteRTT)} j de RTT (${currentRTTPeriod}) restants.`;
+
+        if (DOM.openingReminderText && DOM.openingReminderBanner) {
+            DOM.openingReminderText.textContent = message;
+            DOM.openingReminderBanner.classList.remove('hidden');
+            DOM.openingReminderBanner.classList.add('flex');
+        }
+
+        const NotifAPI = root.Notification;
+        let nativeDispatched = false;
+        if (NotifAPI && NotifAPI.permission === 'granted') {
+            try {
+                new NotifAPI('Suivi Congés & RTT — Rappel de solde', { body: message });
+                nativeDispatched = true;
+            } catch (_e) {
+                // Repli silencieux sur la bannière DOM déjà affichée
+            }
+        }
+
+        return {
+            shown: true,
+            nativeDispatched,
+            permission: NotifAPI && NotifAPI.permission ? NotifAPI.permission : 'unsupported',
+            message
+        };
+    }
+
     root.mettreAJourAffichage = function () {
         const soldes = AppEngine.calculerSoldes(
             appData,
@@ -1062,6 +1266,7 @@
         renderExpirationAlerts();
         root.lancerSimulationUI();
         renderSuggestionsPonts();
+        renderStatistiquesAnnuelles();
         renderHistorique();
         updateRetraite();
         renderCalendar();
@@ -1269,10 +1474,14 @@
         const nextTheme = DOM.initThemeMode && DOM.initThemeMode.value
             ? String(DOM.initThemeMode.value).trim()
             : alertPrefs.theme;
+        const nextRappel = DOM.initRappelOuverture
+            ? Boolean(DOM.initRappelOuverture.checked)
+            : Boolean(alertPrefs.rappelOuvertureActif);
         sauvegarderPreferencesAlertes({
             seuilAlerteJours: nextSeuil,
             echeanceReportCP: nextEcheance,
-            theme: nextTheme
+            theme: nextTheme,
+            rappelOuvertureActif: nextRappel
         });
 
         sauvegarderDonneesCloud();
