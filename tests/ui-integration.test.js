@@ -409,7 +409,7 @@ test('Service Worker (sw.js) : inclut config.js et engine.js et ne supprime que 
                 addAll: async (urls) => { addedUrls.push(...urls); },
                 put: async () => {}
             }),
-            keys: async () => ['conges-pwa-cache-v12', 'conges-pwa-cache-v19', 'autre-app-cache-v1'],
+            keys: async () => ['conges-pwa-cache-v12', 'conges-pwa-cache-v20', 'autre-app-cache-v1'],
             delete: async (name) => { deletedCaches.push(name); return true; },
             match: async () => null
         },
@@ -946,6 +946,42 @@ test('Lot E (UI) : affichage des statistiques annuelles sur le snapshot, export 
     assert.match(elementsById.get('opening-reminder-text').textContent, /14 j de CP/);
     assert.match(elementsById.get('opening-reminder-text').textContent, /6 j de RTT/);
     assert.equal(elementsById.get('solde-cp').textContent, '14', 'L’application n’est jamais bloquée');
+});
+
+test('Navigation 4 onglets (Vue d’ensemble épurée, Calendrier, Simulateur & Ponts, Statistiques) et filtrage des ponts déjà passés', async () => {
+    const { sandbox, elementsById } = createAppSandbox({
+        fetchImpl: async () => ({
+            ok: true,
+            json: async () => structuredClone(REAL_USER_DATA)
+        })
+    });
+
+    await sandbox.__appTestHooks.initApp();
+
+    // 1. Par défaut, seul #tab-dashboard est visible ; #tab-calendar, #tab-simulator et #tab-stats sont masqués
+    assert.equal(elementsById.get('tab-dashboard').classList.contains('hidden'), false);
+    assert.equal(elementsById.get('tab-calendar').classList.contains('hidden'), true);
+    assert.equal(elementsById.get('tab-simulator').classList.contains('hidden'), true);
+    assert.equal(elementsById.get('tab-stats').classList.contains('hidden'), true);
+
+    // 2. Bascule sur l'onglet Simulateur & Ponts
+    sandbox.showTab('simulator');
+    assert.equal(elementsById.get('tab-dashboard').classList.contains('hidden'), true);
+    assert.equal(elementsById.get('tab-simulator').classList.contains('hidden'), false);
+
+    // 3. Bascule sur l'onglet Statistiques
+    sandbox.showTab('stats');
+    assert.equal(elementsById.get('tab-simulator').classList.contains('hidden'), true);
+    assert.equal(elementsById.get('tab-stats').classList.contains('hidden'), false);
+
+    // 4. Au 2026-11-01, le pont passé du 2026-01-02 n'est plus proposé dans #bridges-list
+    sandbox.__appTestHooks.setReferenceDate('2026-11-01');
+    const bridgeRows = elementsById.get('bridges-list').children;
+    assert.equal(
+        bridgeRows.some(r => r.dataset.bridgeDate === '2026-01-02'),
+        false,
+        'Le pont déjà passé du 02/01/2026 ne doit plus être suggéré en novembre 2026'
+    );
 });
 
 

@@ -1025,7 +1025,16 @@
             DOM.bridgesYearLabel.textContent = String(targetYear);
         }
 
-        const suggestions = AppEngine.suggererPonts(appData, targetYear, getActiveFeriesOptions());
+        const refDateObj = injectedReferenceDate
+            ? (AppEngine.parseLocalDate(injectedReferenceDate) || new Date(injectedReferenceDate))
+            : new Date();
+        const refYear = refDateObj.getFullYear();
+        const minDate = targetYear === refYear ? AppEngine.formatLocalDate(refDateObj) : null;
+
+        const suggestions = AppEngine.suggererPonts(appData, targetYear, {
+            ...getActiveFeriesOptions(),
+            ...(minDate ? { minDate } : {})
+        });
         DOM.bridgesList.innerHTML = '';
 
         if (suggestions.length === 0) {
@@ -1275,7 +1284,7 @@
 
     // ─── Navigation Onglets ───
     root.showTab = function (tabName) {
-        const tabs = ['dashboard', 'calendar'];
+        const tabs = ['dashboard', 'calendar', 'simulator', 'stats'];
         tabs.forEach(t => {
             const el = document.getElementById(`tab-${t}`);
             if (el) {
@@ -1293,8 +1302,11 @@
         const activeEl = document.getElementById(`tab-${tabName}`);
         if (activeEl) {
             activeEl.classList.remove('hidden');
-            if (tabName === 'dashboard') activeEl.classList.add('block');
-            if (tabName === 'calendar') activeEl.classList.add('flex');
+            if (tabName === 'calendar') {
+                activeEl.classList.add('flex');
+            } else {
+                activeEl.classList.add('block');
+            }
         }
 
         const activeNav = document.getElementById(`nav-${tabName}`);
