@@ -313,6 +313,83 @@
 
             </div>
 
+            <!-- SIMULATEUR & SUGGESTION DE PONTS (Lot C) -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6" id="lot-c-simulator-section">
+                <!-- Simulateur de congés -->
+                <div class="card space-y-4">
+                    <div class="flex items-center justify-between gap-2">
+                        <h3 class="font-bold text-slate-900 flex items-center gap-2">
+                            <span class="material-symbols-outlined text-primary">calculate</span>
+                            Simulateur « Si je pose ces dates »
+                        </h3>
+                        <span class="text-xs font-medium text-slate-500">Aucun effet tant que non enregistré</span>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="label" for="sim-type">Type de congé</label>
+                            <select id="sim-type" onchange="lancerSimulationUI()" class="input-field">
+                                <option value="CP">Congé Payé (CP)</option>
+                                <option value="RTT">RTT</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="label" for="sim-mode">Mode de calcul</label>
+                            <select id="sim-mode" onchange="changerModeSimulateur()" class="input-field">
+                                <option value="duration">Date de début + durée</option>
+                                <option value="range">Date de début + date de fin</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="label" for="sim-date-debut">Date de début</label>
+                            <input type="date" id="sim-date-debut" oninput="lancerSimulationUI()" onchange="lancerSimulationUI()" class="input-field">
+                        </div>
+                        <div id="sim-duree-container">
+                            <label class="label" for="sim-duree">Durée (jours ouvrés)</label>
+                            <input type="number" id="sim-duree" step="0.5" min="0.5" value="1" oninput="lancerSimulationUI()" onchange="lancerSimulationUI()" class="input-field">
+                        </div>
+                        <div id="sim-date-fin-container" class="hidden">
+                            <label class="label" for="sim-date-fin">Date de fin (incluse)</label>
+                            <input type="date" id="sim-date-fin" oninput="lancerSimulationUI()" onchange="lancerSimulationUI()" class="input-field">
+                        </div>
+                    </div>
+
+                    <div id="sim-result-box" class="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1.5">
+                        <div id="sim-result-summary" class="font-semibold text-slate-900">Choisissez des dates pour simuler votre solde restant.</div>
+                        <div id="sim-result-shift" class="hidden text-primary font-medium"></div>
+                        <div id="sim-result-details" class="text-slate-600"></div>
+                        <div id="sim-result-warning" class="hidden px-2 py-1 rounded bg-error-light border border-error/20 text-on-error-container font-semibold"></div>
+                    </div>
+
+                    <div class="flex justify-end pt-1">
+                        <button id="btn-sim-to-modal" type="button" onclick="transformerSimulationEnDemande()" class="btn-secondary text-xs">
+                            <span class="material-symbols-outlined text-[16px]">open_in_new</span>
+                            Transformer en demande réelle
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Suggestions de ponts -->
+                <div class="card space-y-4">
+                    <div class="flex items-center justify-between gap-2">
+                        <h3 class="font-bold text-slate-900 flex items-center gap-2">
+                            <span class="material-symbols-outlined text-success">celebration</span>
+                            Suggestions de ponts (<span id="bridges-year-label">2026</span>)
+                        </h3>
+                    </div>
+                    <p class="text-xs text-slate-500">
+                        Jours ouvrés isolés entre un jour férié en semaine et un week-end, vérifiés selon votre solde disponible.
+                    </p>
+                    <div id="bridges-list" class="space-y-2.5 text-xs">
+                        <!-- Injecté via JS -->
+                    </div>
+                    <p id="bridges-empty" class="hidden text-xs text-slate-500">Aucun pont supplémentaire disponible avec votre solde actuel sur cette période.</p>
+                </div>
+            </div>
+
             <!-- HISTORY -->
             <div class="card flex flex-col h-[500px]">
                 <div class="flex flex-wrap items-center justify-between gap-3 mb-4 shrink-0">

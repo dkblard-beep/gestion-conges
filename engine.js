@@ -795,6 +795,299 @@
         };
     }
 
+    /**
+     * Simule la pose d'une absence sur une copie immuable de `appData` (Lot C).
+     * - Ne modifie jamais `appData` ni ses tableaux/objets internes.
+     * - Accepte soit `dateDebut` + `duree`, soit `dateDebut` + `dateFin` (calcule alors la durée en jours ouvrés via `compterJoursOuvresEntre`).
+     * - Réutilise `expandAbsenceDays` et `validerAbsence` (décalage week-end/férié, demi-journées, ventilation CP/RTT).
+     *
+     * @param {Object} appData
+     * @param {{ type?: string, dateDebut?: string, date?: string, duree?: number, dateFin?: string }} params
+     * @param {Object} [options={}]
+     */
+    function simulerAbsence(appData, params = {}, options = {}) {
+        const immutableCopy = appData && typeof appData === 'object'
+            ? JSON.parse(JSON.stringify(appData))
+            : { absences: [], configCP: {}, configRTT: {} };
+
+        const type = params && typeof params.type === 'string' ? params.type.toUpperCase() : 'CP';
+        const rawStart = params.dateDebut || params.date || '';
+        const rawEnd = params.dateFin || '';
+        const startObj = parseLocalDate(rawStart);
+
+        if (!startObj) {
+            return { valid: false, error: 'Date de début invalide.' };
+        }
+
+        let resolvedDuree = Number(params.duree);
+        const mode = rawEnd ? 'range' : 'duration';
+
+        if (rawEnd) {
+            const endObj = parseLocalDate(rawEnd);
+            if (!endObj) {
+                return { valid: false, error: 'Date de fin invalide.' };
+            }
+            if (endObj.getTime() < startObj.getTime()) {
+                return { valid: false, error: 'La date de fin doit être postérieure ou égale à la date de début.' };
+            }
+            const workingDaysCount = compterJoursOuvresEntre(startObj, endObj, options);
+            if (workingDaysCount <= 0) {
+                return { valid: false, error: 'Aucun jour ouvré sur la plage sélectionnée.' };
+            }
+            resolvedDuree = workingDaysCount;
+        }
+
+        const validation = validerAbsence(
+            { type, date: formatLocalDate(startObj), duree: resolvedDuree },
+            immutableCopy.absences || [],
+            options,
+            immutableCopy
+        );
+
+        if (!validation.valid) {
+            return {
+                valid: false,
+                error: validation.error,
+                mode,
+                type,
+                dateDebut: formatLocalDate(startObj),
+                duree: resolvedDuree
+            };
+        }
+
+        const SimulatedAbsence = {
+            id: -1,
+            type,
+            date: validation.effectiveStartDate,
+            duree: resolvedDuree
+        };
+
+        const simulatedAppData = {
+            ...immutableCopy,
+            absences: [...(immutableCopy.absences || []), SimulatedAbsence]
+        };
+
+        // Calcul détaillé avant / après par période touchée (ventilation CP sur 1er juin / RTT sur 1er janvier)
+        const ventilation = {};
+        for (const d of validation.expansion.days) {
+            const p = type === 'CP' ? d.cpPeriod : d.rttPeriod;
+            ventilation[p] = Math.round(((ventilation[p] || 0) + d.weight) * 100) / 100;
+        }
+
+        const affectedPeriods = Object.keys(ventilation).sort();
+        const detailsParPeriode = {};
+        for (const p of affectedPeriods) {
+            const before = calculerSoldes(immutableCopy, p, p, options);
+            const after = calculerSoldes(simulatedAppData, p, p, options);
+            detailsParPeriode[p] = {
+                period: p,
+                label: type === 'CP' ? formatCPPeriod(p) : p,
+                joursPoses: ventilation[p],
+                avant: type === 'CP' ? before.resteCP : before.resteRTT,
+                apres: type === 'CP' ? after.resteCP : after.resteRTT,
+                total: type === 'CP' ? after.initCP : after.initRTT
+            };
+        }
+
+        const primaryPeriod = affectedPeriods[0] || (type === 'CP' ? getCPPeriod(validation.effectiveStartDate) : getRTTPeriod(validation.effectiveStartDate));
+        const soldeRestantPrincipal = detailsParPeriode[primaryPeriod]
+            ? detailsParPeriode[primaryPeriod].apres
+            : 0;
+
+        return {
+            valid: true,
+            error: null,
+            mode,
+            type,
+            originalDate: validation.originalDate,
+            effectiveStartDate: validation.effectiveStartDate,
+            endDate: validation.endDate,
+            duree: resolvedDuree,
+            shifted: validation.shifted,
+            shiftReason: validation.shiftReason,
+            expansion: validation.expansion,
+            ventilation,
+            detailsParPeriode,
+            projectedBalances: validation.projectedBalances,
+            soldeRestantPrincipal,
+            isNegative: validation.isNegative
+        };
+    }
+
+    /**
+     * Retourne le libellé lisible d'un jour férié à partir de sa date `YYYY-MM-DD`.
+     */
+    function getNomJourFerie(dateStr, year) {
+        const mmDd = String(dateStr).slice(5);
+        const fixedLabels = {
+            '01-01': "Jour de l'An",
+            '05-01': 'Fête du Travail',
+            '05-08': 'Victoire 1945',
+            '07-14': 'Fête Nationale',
+            '08-15': 'Assomption',
+            '11-01': 'Toussaint',
+            '11-11': 'Armistice 1918',
+            '12-25': 'Noël'
+        };
+        if (fixedLabels[mmDd]) return fixedLabels[mmDd];
+
+        const easter = getEasterSunday(Number(year));
+        const addDays = (base, n) => {
+            const d = new Date(base.getFullYear(), base.getMonth(), base.getDate() + n);
+            return formatLocalDate(d);
+        };
+        if (dateStr === addDays(easter, 1)) return 'Lundi de Pâques';
+        if (dateStr === addDays(easter, 39)) return 'Jeudi de l’Ascension';
+        if (dateStr === addDays(easter, 50)) return 'Lundi de Pentecôte';
+        return 'Jour férié';
+    }
+
+    /**
+     * Suggère les ponts de 1 jour ouvré autour des jours fériés chômés d'une année (Lot C).
+     * Règles métier :
+     * - Respecte `lundiPentecoteTravaille` (via `getJoursFeries(year, options)`).
+     * - Ignore tout jour férié tombant un week-end (samedi ou dimanche).
+     * - Identifie :
+     *   * les lundis ouvrés précédant un mardi férié (ex: lundi `2026-07-13` avant le mardi `2026-07-14`),
+     *   * les vendredis ouvrés suivant un jeudi férié (ex: vendredi `2026-05-15` après le jeudi de l'Ascension `2026-05-14`).
+     * - Exclut par défaut les dates déjà entièrement couvertes par une absence existante (sauf si `options.includeAlreadyBooked === true`).
+     * - Vérifie que le solde disponible (`CP` ou `RTT`) suffit (`soldeApres >= 0`) et n'expose que les options qui ne dépassent pas le solde disponible.
+     * - Indique clairement pour chaque pont le type recommandé (`type`), le solde restant après (`soldeRestantApres`), ainsi que le détail des options éligibles (`eligibleOptions`).
+     *
+     * @param {Object} appData
+     * @param {number|string} [year]
+     * @param {Object} [options={}]
+     */
+    function suggererPonts(appData, year = new Date().getFullYear(), options = {}) {
+        const targetYear = Number(year) || new Date().getFullYear();
+        const immutableCopy = appData && typeof appData === 'object'
+            ? JSON.parse(JSON.stringify(appData))
+            : { absences: [], configCP: {}, configRTT: {} };
+
+        const feriesList = getJoursFeries(targetYear, options);
+        const feriesSet = new Set(feriesList);
+        const includeAlreadyBooked = Boolean(options && options.includeAlreadyBooked);
+        const minDateStr = options && options.minDate ? String(options.minDate) : null;
+
+        const existingAbsences = Array.isArray(immutableCopy.absences) ? immutableCopy.absences : [];
+        const coveredMap = buildCalendarCoveredDays(existingAbsences, options);
+
+        const candidateBridges = [];
+        const seenBridgeDates = new Set();
+
+        for (const ferieStr of feriesList) {
+            const ferieDate = parseLocalDate(ferieStr);
+            if (!ferieDate) continue;
+
+            // Ne jamais proposer un pont pour un férié tombant un week-end (Lot C #4)
+            const dow = ferieDate.getDay();
+            if (dow === 0 || dow === 6) {
+                continue;
+            }
+
+            let bridgeDateObj = null;
+            let positionLabel = '';
+
+            if (dow === 2) {
+                // Mardi férié -> pont le lundi précédent
+                bridgeDateObj = new Date(ferieDate.getFullYear(), ferieDate.getMonth(), ferieDate.getDate() - 1, 0, 0, 0, 0);
+                positionLabel = 'Lundi avant mardi férié';
+            } else if (dow === 4) {
+                // Jeudi férié -> pont le vendredi suivant
+                bridgeDateObj = new Date(ferieDate.getFullYear(), ferieDate.getMonth(), ferieDate.getDate() + 1, 0, 0, 0, 0);
+                positionLabel = 'Vendredi après jeudi férié';
+            }
+
+            if (!bridgeDateObj) continue;
+
+            const bridgeDateStr = formatLocalDate(bridgeDateObj);
+            if (seenBridgeDates.has(bridgeDateStr)) continue;
+            if (minDateStr && bridgeDateStr < minDateStr) continue;
+
+            // Si le jour du pont est lui-même un jour férié chômé ou un week-end, ce n'est pas un jour à poser
+            if (isWeekend(bridgeDateObj) || feriesSet.has(bridgeDateStr)) {
+                continue;
+            }
+
+            const coveredInfo = coveredMap.get(bridgeDateStr);
+            const alreadyBookedWeight = coveredInfo ? coveredInfo.totalWeight : 0;
+            if (!includeAlreadyBooked && alreadyBookedWeight >= 1) {
+                continue;
+            }
+
+            seenBridgeDates.add(bridgeDateStr);
+            const customDuree = Number(options && options.dureePont);
+            const dureePont = Number.isFinite(customDuree) && customDuree > 0 ? customDuree : 1;
+            candidateBridges.push({
+                datePont: bridgeDateStr,
+                dateFerie: ferieStr,
+                nomFerie: getNomJourFerie(ferieStr, targetYear),
+                positionLabel,
+                duree: dureePont,
+                reposTotalJours: 3 + dureePont
+            });
+        }
+
+        // Pour chaque candidat, vérifier le solde disponible réel (tenant toujours compte des absences existantes)
+        // et calculer strictement soldeRestantApres = soldeAvant - dureePont sans jamais dépasser le solde disponible (Lot C #5 & #6)
+        const suggestions = [];
+
+        for (const cand of candidateBridges) {
+            const cpPeriod = getCPPeriod(cand.datePont);
+            const rttPeriod = getRTTPeriod(cand.datePont);
+            const currentSoldes = calculerSoldes(immutableCopy, cpPeriod, rttPeriod, options);
+
+            const eligibleOptions = [];
+
+            // Test RTT (soldeRestantApres = soldeAvant - cand.duree)
+            const soldeAvantRTT = currentSoldes.resteRTT;
+            const rttRestantApres = Math.round((soldeAvantRTT - cand.duree) * 100) / 100;
+            if (soldeAvantRTT >= cand.duree && rttRestantApres >= 0) {
+                eligibleOptions.push({
+                    type: 'RTT',
+                    period: rttPeriod,
+                    soldeAvant: soldeAvantRTT,
+                    soldeRestantApres: rttRestantApres,
+                    totalPeriode: currentSoldes.initRTT,
+                    label: `RTT (${rttPeriod}) : solde avant ${soldeAvantRTT} j → solde restant après : ${rttRestantApres} j`
+                });
+            }
+
+            // Test CP (soldeRestantApres = soldeAvant - cand.duree)
+            const soldeAvantCP = currentSoldes.resteCP;
+            const cpRestantApres = Math.round((soldeAvantCP - cand.duree) * 100) / 100;
+            if (soldeAvantCP >= cand.duree && cpRestantApres >= 0) {
+                eligibleOptions.push({
+                    type: 'CP',
+                    period: cpPeriod,
+                    soldeAvant: soldeAvantCP,
+                    soldeRestantApres: cpRestantApres,
+                    totalPeriode: currentSoldes.initCP,
+                    label: `CP (${formatCPPeriod(cpPeriod)}) : solde avant ${soldeAvantCP} j → solde restant après : ${cpRestantApres} j`
+                });
+            }
+
+            // Règle Lot C #5 & #6 : un pont suggéré ne doit pas dépasser le solde disponible
+            if (eligibleOptions.length === 0) {
+                continue;
+            }
+
+            const primaryOption = eligibleOptions[0];
+            suggestions.push({
+                ...cand,
+                type: primaryOption.type,
+                period: primaryOption.period,
+                soldeAvant: primaryOption.soldeAvant,
+                soldeRestantApres: primaryOption.soldeRestantApres,
+                eligibleOptions,
+                summary: `Poser ${cand.duree} jour${cand.duree > 1 ? 's' : ''} de ${primaryOption.type} le ${cand.datePont} (${cand.nomFerie} le ${cand.dateFerie}) → solde ${primaryOption.type} avant : ${primaryOption.soldeAvant} j, solde restant après : ${primaryOption.soldeRestantApres} j`
+            });
+        }
+
+        suggestions.sort((a, b) => (a.datePont < b.datePont ? -1 : a.datePont > b.datePont ? 1 : 0));
+        return suggestions;
+    }
+
     return {
         parseLocalDate,
         formatLocalDate,
@@ -816,7 +1109,9 @@
         compterJoursOuvresEntre,
         resolveCPDeadlineDate,
         calculerAlertesExpiration,
-        filtrerAbsencesHistorique
+        filtrerAbsencesHistorique,
+        simulerAbsence,
+        suggererPonts
     };
 });
 

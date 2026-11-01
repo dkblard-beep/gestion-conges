@@ -96,6 +96,21 @@
         DOM.btnToggleDeleteLock = document.getElementById('btn-toggle-delete-lock');
         DOM.deleteLockIcon      = document.getElementById('delete-lock-icon');
         DOM.deleteLockLabel     = document.getElementById('delete-lock-label');
+        DOM.simType             = document.getElementById('sim-type');
+        DOM.simMode             = document.getElementById('sim-mode');
+        DOM.simDateDebut        = document.getElementById('sim-date-debut');
+        DOM.simDuree            = document.getElementById('sim-duree');
+        DOM.simDateFin          = document.getElementById('sim-date-fin');
+        DOM.simDureeContainer   = document.getElementById('sim-duree-container');
+        DOM.simDateFinContainer = document.getElementById('sim-date-fin-container');
+        DOM.simResultSummary    = document.getElementById('sim-result-summary');
+        DOM.simResultShift      = document.getElementById('sim-result-shift');
+        DOM.simResultDetails    = document.getElementById('sim-result-details');
+        DOM.simResultWarning    = document.getElementById('sim-result-warning');
+        DOM.btnSimToModal       = document.getElementById('btn-sim-to-modal');
+        DOM.bridgesYearLabel    = document.getElementById('bridges-year-label');
+        DOM.bridgesList         = document.getElementById('bridges-list');
+        DOM.bridgesEmpty        = document.getElementById('bridges-empty');
     }
 
     let appData = AppConfig.createEmptyData();
@@ -115,6 +130,7 @@
     let historyFilterType = 'ALL';                // Lecture seule ('ALL' | 'CP' | 'RTT')
     let historyFilterPeriod = 'ALL';              // Lecture seule ('ALL' | année), auto-réinitialisé si la période disparaît
     let injectedReferenceDate = null;             // Permet d'injecter une date de référence déterministe pour les tests UI
+    let lastSimulationResult = null;              // Dernier résultat de simulation (immuable, sans effet sur appData)
 
     /**
      * Retourne les options de jours fériés actives (lundiPentecoteTravaille configurable, true par défaut).
@@ -473,6 +489,8 @@
         currentCPPeriod = AppEngine.getCPPeriod(today);
         currentRTTPeriod = AppEngine.getRTTPeriod(today);
         if (DOM.dateDebut) DOM.dateDebut.value = today;
+        if (DOM.simDateDebut && !DOM.simDateDebut.value) DOM.simDateDebut.value = today;
+        if (DOM.simDateFin && !DOM.simDateFin.value) DOM.simDateFin.value = today;
 
         const localRaw = lireDonneesLocales();
         if (localRaw && AppConfig.isValidPayload(localRaw)) {
@@ -755,6 +773,167 @@
         return result;
     }
 
+    // ─── Simulateur "Si je pose ces dates" & Suggestion de ponts (Lot C) ───
+    root.changerModeSimulateur = function () {
+        if (!DOM.simMode) return;
+        const isRange = DOM.simMode.value === 'range';
+        if (DOM.simDureeContainer) DOM.simDureeContainer.classList.toggle('hidden', isRange);
+        if (DOM.simDateFinContainer) DOM.simDateFinContainer.classList.toggle('hidden', !isRange);
+        root.lancerSimulationUI();
+    };
+
+    /**
+     * Exécute la simulation sur une copie immuable de `appData` (aucune modification d'état ni de solde).
+     */
+    root.lancerSimulationUI = function () {
+        if (!DOM.simResultSummary) return null;
+        const type = DOM.simType ? DOM.simType.value : 'CP';
+        const mode = DOM.simMode ? DOM.simMode.value : 'duration';
+        const dateDebut = DOM.simDateDebut ? DOM.simDateDebut.value : '';
+        const duree = DOM.simDuree ? parseFloat(DOM.simDuree.value) : 1;
+        const dateFin = mode === 'range' && DOM.simDateFin ? DOM.simDateFin.value : '';
+
+        if (!dateDebut) {
+            lastSimulationResult = null;
+            DOM.simResultSummary.textContent = 'Choisissez une date de début pour lancer la simulation.';
+            if (DOM.simResultShift) DOM.simResultShift.classList.add('hidden');
+            if (DOM.simResultDetails) DOM.simResultDetails.textContent = '';
+            if (DOM.simResultWarning) DOM.simResultWarning.classList.add('hidden');
+            return null;
+        }
+
+        const result = AppEngine.simulerAbsence(
+            appData,
+            mode === 'range'
+                ? { type, dateDebut, dateFin }
+                : { type, dateDebut, duree },
+            getActiveFeriesOptions()
+        );
+        lastSimulationResult = result;
+
+        if (!result.valid) {
+            DOM.simResultSummary.textContent = `Simulation impossible : ${result.error}`;
+            if (DOM.simResultShift) DOM.simResultShift.classList.add('hidden');
+            if (DOM.simResultDetails) DOM.simResultDetails.textContent = '';
+            if (DOM.simResultWarning) DOM.simResultWarning.classList.add('hidden');
+            return result;
+        }
+
+        const dureeStr = formatDaysNumber(result.duree);
+        const rangeLabel = result.effectiveStartDate === result.endDate
+            ? `le ${result.effectiveStartDate}`
+            : `du ${result.effectiveStartDate} au ${result.endDate}`;
+        const resteStr = formatDaysNumber(result.soldeRestantPrincipal);
+        DOM.simResultSummary.textContent =
+            `Si vous posez ${dureeStr} j de ${result.type} (${rangeLabel}), il vous restera ${resteStr} jour${Math.abs(result.soldeRestantPrincipal) > 1 ? 's' : ''}.`;
+
+        if (DOM.simResultShift) {
+            if (result.shifted) {
+                const raisonLabel = result.shiftReason === 'ferie' ? 'jour férié' : 'week-end';
+                DOM.simResultShift.textContent =
+                    `Décalage automatique : le ${result.originalDate} tombe un ${raisonLabel}, début effectif au ${result.effectiveStartDate}.`;
+                DOM.simResultShift.classList.remove('hidden');
+            } else {
+                DOM.simResultShift.textContent = '';
+                DOM.simResultShift.classList.add('hidden');
+            }
+        }
+
+        if (DOM.simResultDetails) {
+            const detailParts = Object.values(result.detailsParPeriode || {}).map(
+                d => `${d.label} : ${formatDaysNumber(d.avant)} j → ${formatDaysNumber(d.apres)} j restants (sur ${formatDaysNumber(d.total)} j)`
+            );
+            DOM.simResultDetails.textContent = detailParts.join(' | ');
+        }
+
+        if (DOM.simResultWarning) {
+            if (result.isNegative) {
+                DOM.simResultWarning.textContent = `Attention : cette simulation entraîne un solde ${result.type} négatif.`;
+                DOM.simResultWarning.classList.remove('hidden');
+            } else {
+                DOM.simResultWarning.textContent = '';
+                DOM.simResultWarning.classList.add('hidden');
+            }
+        }
+
+        return result;
+    };
+
+    /**
+     * Préremplit la modale d'absence existante avec les paramètres de la simulation en cours,
+     * SANS créer ni enregistrer l'absence automatiquement (Lot C #3).
+     */
+    root.transformerSimulationEnDemande = function () {
+        const sim = lastSimulationResult && lastSimulationResult.valid
+            ? lastSimulationResult
+            : root.lancerSimulationUI();
+
+        const targetType = sim && sim.type ? sim.type : (DOM.simType ? DOM.simType.value : 'CP');
+        const targetDate = sim && sim.valid
+            ? sim.effectiveStartDate
+            : (DOM.simDateDebut ? DOM.simDateDebut.value : AppEngine.formatLocalDate(new Date()));
+        const targetDuree = sim && sim.valid
+            ? sim.duree
+            : (DOM.simDuree ? parseFloat(DOM.simDuree.value) || 1 : 1);
+
+        setModalMode('create');
+        if (DOM.typeAbsence) DOM.typeAbsence.value = targetType;
+        root.preparerAbsence(targetDuree, targetDate);
+        return { type: targetType, date: targetDate, duree: targetDuree };
+    };
+
+    /**
+     * Affiche les suggestions de ponts pour l'année sélectionnée en vérifiant que le solde suffit (Lot C #4, #5, #6).
+     */
+    function renderSuggestionsPonts() {
+        if (!DOM.bridgesList || !DOM.bridgesEmpty) return [];
+        const targetYear = Number(currentRTTPeriod) || Number(currentCPPeriod) || new Date().getFullYear();
+        if (DOM.bridgesYearLabel) {
+            DOM.bridgesYearLabel.textContent = String(targetYear);
+        }
+
+        const suggestions = AppEngine.suggererPonts(appData, targetYear, getActiveFeriesOptions());
+        DOM.bridgesList.innerHTML = '';
+
+        if (suggestions.length === 0) {
+            DOM.bridgesEmpty.classList.remove('hidden');
+            return suggestions;
+        }
+        DOM.bridgesEmpty.classList.add('hidden');
+
+        suggestions.forEach(pont => {
+            const row = document.createElement('div');
+            row.dataset.bridgeDate = pont.datePont;
+            row.className = 'flex flex-wrap items-center justify-between gap-2 p-3 rounded-xl bg-slate-50 border border-slate-200';
+
+            const optionsText = pont.eligibleOptions
+                .map(opt => `${opt.type} (solde avant : ${formatDaysNumber(opt.soldeAvant)} j → solde restant après : ${formatDaysNumber(opt.soldeRestantApres)} j)`)
+                .join(' | ');
+            const dureeStr = formatDaysNumber(pont.duree);
+
+            row.innerHTML = `
+                <div>
+                    <div class="font-bold text-slate-900">Pont du ${pont.datePont} • ${pont.nomFerie} (${pont.dateFerie})</div>
+                    <div class="text-slate-600 mt-0.5">${dureeStr} jour${pont.duree > 1 ? 's' : ''} à poser (${pont.positionLabel}) → <strong>${pont.type}</strong> recommandé • ${optionsText}</div>
+                </div>
+                <button type="button" class="btn-secondary !py-1 !px-2.5 text-xs">Préremplir (${pont.type})</button>
+            `;
+
+            const btn = row.querySelector('button');
+            if (btn) {
+                btn.addEventListener('click', () => {
+                    setModalMode('create');
+                    if (DOM.typeAbsence) DOM.typeAbsence.value = pont.type;
+                    root.preparerAbsence(pont.duree, pont.datePont);
+                });
+            }
+
+            DOM.bridgesList.appendChild(row);
+        });
+
+        return suggestions;
+    }
+
     root.mettreAJourAffichage = function () {
         const soldes = AppEngine.calculerSoldes(
             appData,
@@ -764,6 +943,8 @@
         );
         afficherSoldes(soldes);
         renderExpirationAlerts();
+        root.lancerSimulationUI();
+        renderSuggestionsPonts();
         renderHistorique();
         updateRetraite();
         renderCalendar();
@@ -1497,7 +1678,8 @@
             if (type !== undefined) historyFilterType = type;
             if (period !== undefined) historyFilterPeriod = period;
             renderHistorique();
-        }
+        },
+        getLastSimulationResult: () => lastSimulationResult
     };
 
     if (typeof document !== 'undefined') {

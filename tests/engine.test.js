@@ -429,4 +429,185 @@ test('Lot B (engine.js) : filtrerAbsencesHistorique est en lecture seule et réi
     assert.equal(resetResult.items.length, 2, 'Toutes les absences restantes sont affichées');
 });
 
+test('Lot C (engine.js) : simulerAbsence travaille sur une copie immuable de appData et gère début+durée ainsi que début+fin avec décalage, demi-journée et ventilation', () => {
+    const appData = {
+        absences: [
+            { id: 1, type: 'CP', date: '2026-10-05', duree: 5 }
+        ],
+        configCP: { '2025': 25, '2026': 29 },
+        configRTT: { '2026': 12 }
+    };
+    const snapshotBefore = JSON.stringify(appData);
+
+    // 1. Mode dateDebut + duree (demi-journée 1.5j commençant un samedi 06/06/2026 -> décalé au lundi 08/06/2026)
+    const simDuration = AppEngine.simulerAbsence(appData, {
+        type: 'CP',
+        dateDebut: '2026-06-06',
+        duree: 1.5
+    });
+    assert.equal(simDuration.valid, true);
+    assert.equal(simDuration.mode, 'duration');
+    assert.equal(simDuration.shifted, true);
+    assert.equal(simDuration.effectiveStartDate, '2026-06-08');
+    assert.equal(simDuration.endDate, '2026-06-09');
+    assert.equal(simDuration.duree, 1.5);
+    assert.equal(simDuration.soldeRestantPrincipal, 22.5, '29 - 5 (déjà pris) - 1.5 (simulé) = 22.5');
+
+    // 2. Mode dateDebut + dateFin à cheval sur le 1er juin (vendredi 29/05/2026 au mardi 02/06/2026 -> 3 jours ouvrés : 1j sur 2025, 2j sur 2026)
+    const simRange = AppEngine.simulerAbsence(appData, {
+        type: 'CP',
+        dateDebut: '2026-05-29',
+        dateFin: '2026-06-02'
+    });
+    assert.equal(simRange.valid, true);
+    assert.equal(simRange.mode, 'range');
+    assert.equal(simRange.duree, 3);
+    assert.deepEqual(simRange.ventilation, { '2025': 1, '2026': 2 });
+    assert.equal(simRange.detailsParPeriode['2025'].apres, 24);
+    assert.equal(simRange.detailsParPeriode['2026'].apres, 22);
+
+    // 3. Vérification stricte de l'immuabilité de appData (aucun solde ni tableau modifié)
+    assert.equal(JSON.stringify(appData), snapshotBefore, 'simulerAbsence ne doit jamais modifier appData');
+});
+
+test('Lot C (engine.js) : suggererPonts propose les ponts du 15/05/2026 et du 13/07/2026, ignore les fériés de week-end (15/08, 01/11), respecte lundiPentecoteTravaille et indique type + solde restant', () => {
+    const cleanAppData = {
+        absences: [],
+        configCP: { '2025': 10, '2026': 14 },
+        configRTT: { '2026': 6 }
+    };
+
+    const ponts = AppEngine.suggererPonts(cleanAppData, 2026, {
+        lundiPentecoteTravaille: true
+    });
+
+    const datesPonts = ponts.map(p => p.datePont);
+    assert.ok(datesPonts.includes('2026-05-15'), 'Le pont du vendredi 15/05/2026 (après Jeudi de l’Ascension 14/05) doit être suggéré');
+    assert.ok(datesPonts.includes('2026-07-13'), 'Le pont du lundi 13/07/2026 (avant mardi 14/07 Fête Nationale) doit être suggéré');
+
+    // Vérifie qu'aucun férié tombant un week-end en 2026 (15/08 samedi, 01/11 dimanche) ne génère de pont
+    for (const p of ponts) {
+        assert.notEqual(p.dateFerie, '2026-08-15', 'Le 15 août 2026 (samedi) ne doit pas générer de pont');
+        assert.notEqual(p.dateFerie, '2026-11-01', 'Le 1er novembre 2026 (dimanche) ne doit pas générer de pont');
+        assert.ok(p.type === 'RTT' || p.type === 'CP', 'Chaque pont indique clairement le type (CP ou RTT)');
+        assert.equal(typeof p.soldeRestantApres, 'number', 'Chaque pont indique clairement le solde restant après');
+        assert.ok(p.soldeRestantApres >= 0, 'Le solde restant après ne doit jamais être négatif');
+    }
+
+    const pontMai = ponts.find(p => p.datePont === '2026-05-15');
+    assert.equal(pontMai.type, 'RTT');
+    assert.equal(pontMai.soldeRestantApres, 5, 'Solde RTT 2026 : 6 - 1 = 5 jours restants');
+
+    const pontJuillet = ponts.find(p => p.datePont === '2026-07-13');
+    assert.equal(pontJuillet.type, 'RTT');
+    assert.equal(pontJuillet.soldeRestantApres, 5, 'Solde RTT 2026 : 6 - 1 = 5 jours restants');
+});
+
+test('Lot C (Condition #6) : un pont suggéré ne doit jamais dépasser le solde disponible', () => {
+    // 1. Cas où RTT = 0 mais CP = 2 -> le pont est suggéré uniquement en CP (reste 1j), jamais en RTT
+    const onlyCpData = {
+        absences: [],
+        configCP: { '2025': 2, '2026': 2 },
+        configRTT: { '2026': 0 }
+    };
+    const pontsCpOnly = AppEngine.suggererPonts(onlyCpData, 2026);
+    assert.ok(pontsCpOnly.length > 0);
+    for (const p of pontsCpOnly) {
+        assert.equal(p.type, 'CP', 'Avec 0 RTT disponible, seul CP est proposé');
+        assert.equal(p.soldeRestantApres, 1, 'Il reste 1 jour de CP après le pont');
+        assert.equal(p.eligibleOptions.some(o => o.type === 'RTT'), false, 'RTT ne doit pas être proposé si solde RTT < 1');
+    }
+
+    // 2. Cas où RTT = 0.5 (insuffisant pour un pont de 1j) et CP = 0 -> aucun pont ne doit être suggéré
+    const insufficientData = {
+        absences: [],
+        configCP: { '2025': 0, '2026': 0.5 },
+        configRTT: { '2026': 0.5 }
+    };
+    const noPonts = AppEngine.suggererPonts(insufficientData, 2026);
+    assert.equal(noPonts.length, 0, 'Aucun pont ne doit être suggéré lorsque les soldes CP et RTT sont inférieurs à 1 jour');
+});
+
+test('Lot C (Correctif #1 & #2) : solde RTT = 6 (même avec includeAlreadyBooked sur données réelles) -> pont de 1 jour donne soldeRestantApres = 5, pont de 2 jours donne 4', () => {
+    const realUserData = {
+        absences: [
+            { id: 1790412079086, type: 'CP', date: '2026-10-05', duree: 5 },
+            { id: 1790412095516, type: 'CP', date: '2026-08-03', duree: 10 },
+            { id: 1790970282472, type: 'RTT', date: '2026-09-25', duree: 1 },
+            { id: 1791001510220, type: 'RTT', date: '2026-07-13', duree: 1 },
+            { id: 1791001615916, type: 'RTT', date: '2026-05-15', duree: 1 },
+            { id: 1791001638651, type: 'RTT', date: '2026-05-25', duree: 1 },
+            { id: 1793543141050, type: 'RTT', date: '2026-11-12', duree: 2 }
+        ],
+        configCP: { '2026': 29 },
+        configRTT: { '2026': 12 }
+    };
+
+    // Sur realUserData, le solde RTT restant actuel est de 6 (12 init - 6 pris).
+    // 1. Pont d'1 jour -> soldeAvant = 6, soldeRestantApres = 6 - 1 = 5
+    const ponts1j = AppEngine.suggererPonts(realUserData, 2026, {
+        includeAlreadyBooked: true,
+        dureePont: 1
+    });
+    const pontJuillet1j = ponts1j.find(p => p.datePont === '2026-07-13');
+    assert.ok(pontJuillet1j);
+    assert.equal(pontJuillet1j.soldeAvant, 6);
+    assert.equal(pontJuillet1j.duree, 1);
+    assert.equal(pontJuillet1j.soldeRestantApres, 5, 'Solde RTT 6, pont d’1 jour -> soldeRestantApres = 5');
+
+    // 2. Pont de 2 jours -> soldeAvant = 6, soldeRestantApres = 6 - 2 = 4
+    const ponts2j = AppEngine.suggererPonts(realUserData, 2026, {
+        includeAlreadyBooked: true,
+        dureePont: 2
+    });
+    const pontJuillet2j = ponts2j.find(p => p.datePont === '2026-07-13');
+    assert.ok(pontJuillet2j);
+    assert.equal(pontJuillet2j.soldeAvant, 6);
+    assert.equal(pontJuillet2j.duree, 2);
+    assert.equal(pontJuillet2j.soldeRestantApres, 4, 'Solde RTT 6, pont de 2 jours -> soldeRestantApres = 4');
+});
+
+test('Lot C (Correctif #3) : solde 0 -> aucun pont suggéré', () => {
+    const zeroBalanceData = {
+        absences: [],
+        configCP: { '2025': 0, '2026': 0 },
+        configRTT: { '2026': 0 }
+    };
+    const ponts = AppEngine.suggererPonts(zeroBalanceData, 2026);
+    assert.equal(ponts.length, 0, 'Avec un solde CP = 0 et RTT = 0, aucun pont ne doit être suggéré');
+});
+
+test('Lot C (Correctif #4) : une plage de dates incluant un week-end ou un férié donne le bon nombre de jours ouvrés, date de fin incluse', () => {
+    const baseData = {
+        absences: [],
+        configCP: { '2026': 29 },
+        configRTT: { '2026': 12 }
+    };
+
+    // Plage du jeudi 09/07/2026 au mercredi 15/07/2026 (7 jours calendaires, date de fin incluse) :
+    // - jeu 09/07 : ouvré (1)
+    // - ven 10/07 : ouvré (2)
+    // - sam 11/07 : week-end (exclu)
+    // - dim 12/07 : week-end (exclu)
+    // - lun 13/07 : ouvré (3)
+    // - mar 14/07 : Fête Nationale férié (exclu)
+    // - mer 15/07 : ouvré, date de fin incluse (4)
+    // Total attendu = 4 jours ouvrés
+    const count = AppEngine.compterJoursOuvresEntre('2026-07-09', '2026-07-15');
+    assert.equal(count, 4, 'Doit compter exactement 4 jours ouvrés en excluant sam/dim et le 14 juillet, date de fin incluse');
+
+    const sim = AppEngine.simulerAbsence(baseData, {
+        type: 'CP',
+        dateDebut: '2026-07-09',
+        dateFin: '2026-07-15'
+    });
+    assert.equal(sim.valid, true);
+    assert.equal(sim.duree, 4, 'Le simulateur en mode plage calcule 4 jours ouvrés (date de fin incluse)');
+    assert.equal(sim.effectiveStartDate, '2026-07-09');
+    assert.equal(sim.endDate, '2026-07-15');
+    assert.equal(sim.soldeRestantPrincipal, 25, '29 - 4 = 25 jours de CP restants');
+});
+
+
+
 

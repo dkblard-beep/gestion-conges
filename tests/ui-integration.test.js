@@ -385,7 +385,7 @@ test('Service Worker (sw.js) : inclut config.js et engine.js et ne supprime que 
                 addAll: async (urls) => { addedUrls.push(...urls); },
                 put: async () => {}
             }),
-            keys: async () => ['conges-pwa-cache-v12', 'conges-pwa-cache-v16', 'autre-app-cache-v1'],
+            keys: async () => ['conges-pwa-cache-v12', 'conges-pwa-cache-v17', 'autre-app-cache-v1'],
             delete: async (name) => { deletedCaches.push(name); return true; },
             match: async () => null
         },
@@ -716,5 +716,57 @@ test('Lot B (UI) : filtres de l’historique en lecture seule (aucun effet sur a
     assert.equal(elementsById.get('filter-history-period').value, 'ALL');
     assert.equal(elementsById.get('historique-list').children.length, 7, 'Les 7 absences de 2026 sont affichées');
 });
+
+test('Lot C (UI) : le simulateur ne modifie aucun solde tant qu’on n’enregistre pas, et "Transformer en demande réelle" préremplit la modale sans créer l’absence automatiquement', async () => {
+    const { sandbox, elementsById } = createAppSandbox({
+        fetchImpl: async () => ({
+            ok: true,
+            json: async () => structuredClone(REAL_USER_DATA)
+        })
+    });
+
+    await sandbox.__appTestHooks.initApp();
+
+    // État initial de référence : 7 absences, CP = 14, RTT = 6
+    assert.equal(sandbox.__appTestHooks.getAppData().absences.length, 7);
+    assert.equal(elementsById.get('solde-cp').textContent, '14');
+    assert.equal(elementsById.get('solde-rtt').textContent, '6');
+
+    // 1. Simulation en mode plage (date de début + date de fin) : du lundi 2026-11-16 au vendredi 2026-11-20 (5 jours ouvrés de CP)
+    elementsById.get('sim-type').value = 'CP';
+    elementsById.get('sim-mode').value = 'range';
+    sandbox.changerModeSimulateur();
+    elementsById.get('sim-date-debut').value = '2026-11-16';
+    elementsById.get('sim-date-fin').value = '2026-11-20';
+
+    const simRes = sandbox.lancerSimulationUI();
+    assert.equal(simRes.valid, true);
+    assert.equal(simRes.duree, 5);
+    assert.equal(simRes.soldeRestantPrincipal, 9, '14 - 5 = 9 jours de CP restants dans la simulation');
+    assert.match(elementsById.get('sim-result-summary').textContent, /il vous restera 9 jours/);
+
+    // Aucun solde réel ni absence n'a changé dans appData ni sur les cartes de solde
+    assert.equal(sandbox.__appTestHooks.getAppData().absences.length, 7, 'Aucune absence créée pendant la simulation');
+    assert.equal(elementsById.get('solde-cp').textContent, '14', 'Le solde CP réel affiché reste à 14');
+    assert.equal(elementsById.get('solde-rtt').textContent, '6', 'Le solde RTT réel affiché reste à 6');
+
+    // 2. Clic sur "Transformer en demande réelle" : ouvre et préremplit la modale existante SANS créer l'absence
+    const modal = elementsById.get('form-absence');
+    assert.equal(modal.classList.contains('hidden'), true);
+
+    const transformed = sandbox.transformerSimulationEnDemande();
+    assert.equal(transformed.type, 'CP');
+    assert.equal(transformed.date, '2026-11-16');
+    assert.equal(transformed.duree, 5);
+    assert.equal(modal.classList.contains('hidden'), false, 'La modale est ouverte');
+    assert.equal(elementsById.get('type-absence').value, 'CP');
+    assert.equal(elementsById.get('date-debut').value, '2026-11-16');
+    assert.equal(Number(elementsById.get('duree-absence').value), 5);
+
+    // Tant qu'on n'a pas cliqué sur Enregistrer dans la modale, l'absence n'est toujours pas créée
+    assert.equal(sandbox.__appTestHooks.getAppData().absences.length, 7, 'Le bouton Transformer ne doit pas créer l’absence automatiquement');
+    assert.equal(elementsById.get('solde-cp').textContent, '14');
+});
+
 
 
