@@ -866,6 +866,21 @@ test('Fermetures d’entreprise : fermeture traversant le changement d’année 
     assert.equal(stats2027.repartitionMensuelle.find(m => m.mois === 1).total, 3);
 });
 
+test('engine.js : formaterPlageDateFR gère les 4 formats de dates naturelles françaises sans coupure de nombre', () => {
+    // Cas 1 : date unique (ou dates de début et fin identiques)
+    assert.equal(AppEngine.formaterPlageDateFR('2026-09-25'), '25 septembre 2026');
+    assert.equal(AppEngine.formaterPlageDateFR('2026-09-25', '2026-09-25'), '25 septembre 2026');
+
+    // Cas 2 : même mois et même année
+    assert.equal(AppEngine.formaterPlageDateFR('2026-10-05', '2026-10-09'), '5–9 octobre 2026');
+
+    // Cas 3 : mois différents, même année
+    assert.equal(AppEngine.formaterPlageDateFR('2026-10-28', '2026-11-03'), '28 octobre – 3 novembre 2026');
+
+    // Cas 4 : années différentes
+    assert.equal(AppEngine.formaterPlageDateFR('2026-12-28', '2027-01-04'), '28 décembre 2026 – 4 janvier 2027');
+});
+
 
 
 

@@ -83,7 +83,8 @@ function createAppSandbox({ localStorageInit = {}, fetchImpl, systemPrefersDark 
                 el.classList = classList;
             },
             get innerHTML() {
-                return innerHTMLVal;
+                if (innerHTMLVal) return innerHTMLVal;
+                return children.map(c => c.innerHTML || c.textContent || '').join('\n');
             },
             set innerHTML(val) {
                 innerHTMLVal = String(val || '');
@@ -250,12 +251,10 @@ test('Branchement UI : affiche CP = 14 / Total = 29 et RTT = 6 / Total = 12 sur 
     await sandbox.__appTestHooks.initApp();
 
     assert.equal(elementsById.get('solde-cp').textContent, '14');
-    assert.equal(elementsById.get('reste-cp-label').textContent, '14');
     assert.equal(elementsById.get('total-cp').textContent, '29');
     assert.equal(elementsById.get('pris-cp').textContent, '15');
 
     assert.equal(elementsById.get('solde-rtt').textContent, '6');
-    assert.equal(elementsById.get('reste-rtt-label').textContent, '6');
     assert.equal(elementsById.get('total-rtt').textContent, '12');
     assert.equal(elementsById.get('pris-rtt').textContent, '6');
 
@@ -409,7 +408,7 @@ test('Service Worker (sw.js) : inclut config.js et engine.js et ne supprime que 
                 addAll: async (urls) => { addedUrls.push(...urls); },
                 put: async () => {}
             }),
-            keys: async () => ['conges-pwa-cache-v12', 'conges-pwa-cache-v18', 'conges-pwa-cache-v19', 'conges-pwa-cache-v20', 'conges-pwa-cache-v21', 'conges-pwa-cache-v22', 'autre-app-cache-v1'],
+            keys: async () => ['conges-pwa-cache-v12', 'conges-pwa-cache-v18', 'conges-pwa-cache-v19', 'conges-pwa-cache-v20', 'conges-pwa-cache-v21', 'conges-pwa-cache-v22', 'conges-pwa-cache-v23', 'conges-pwa-cache-v24', 'autre-app-cache-v1'],
             delete: async (name) => { deletedCaches.push(name); return true; },
             match: async () => null
         },
@@ -431,15 +430,15 @@ test('Service Worker (sw.js) : inclut config.js et engine.js et ne supprime que 
     assert.ok(addedUrls.includes('./engine.js'), 'sw.js doit mettre en cache ./engine.js');
     assert.ok(addedUrls.includes('./app.js'), 'sw.js doit mettre en cache ./app.js');
 
-    // 2. Test activate : supprime tous les anciens caches conges-pwa-cache-* mais conserve conges-pwa-cache-v22 et autre-app-cache-v1
+    // 2. Test activate : supprime tous les anciens caches conges-pwa-cache-* mais conserve conges-pwa-cache-v24 et autre-app-cache-v1
     let activatePromise;
     listeners.activate({ waitUntil: (p) => { activatePromise = p; } });
     await activatePromise;
 
     assert.deepEqual(
         deletedCaches,
-        ['conges-pwa-cache-v12', 'conges-pwa-cache-v18', 'conges-pwa-cache-v19', 'conges-pwa-cache-v20', 'conges-pwa-cache-v21'],
-        'Tous les anciens caches conges-pwa-cache-* (v12 à v21) doivent être purgés en conservant v22 et les caches tiers'
+        ['conges-pwa-cache-v12', 'conges-pwa-cache-v18', 'conges-pwa-cache-v19', 'conges-pwa-cache-v20', 'conges-pwa-cache-v21', 'conges-pwa-cache-v22', 'conges-pwa-cache-v23'],
+        'Tous les anciens caches conges-pwa-cache-* (v12 à v23) doivent être purgés en conservant v24 et les caches tiers'
     );
 });
 
@@ -682,9 +681,39 @@ test('Lot B (UI) : réglages d’alerte dans une clé localStorage séparée san
     const alertsContainer = elementsById.get('expiration-alerts');
     assert.equal(alertsContainer.classList.contains('hidden'), false, 'Le conteneur d’alertes doit être visible au 2026-11-01');
     assert.equal(alertsContainer.children.length, 1, 'Une seule alerte (RTT) doit être affichée');
-    assert.equal(alertsContainer.children[0].dataset.alertType, 'RTT');
-    assert.match(alertsContainer.children[0].innerHTML, /2026-12-31/);
-    assert.match(alertsContainer.children[0].innerHTML, /6 jours/);
+
+    const rttCard = alertsContainer.children[0];
+    assert.equal(rttCard.dataset.alertType, 'RTT');
+
+    // Vérifie l'en-tête accessible replié par défaut avec texte court dynamique
+    const toggleBtn = rttCard.children[0];
+    const panel = rttCard.children[1];
+    assert.equal(toggleBtn.getAttribute('aria-expanded'), 'false', 'L’alerte doit être repliée par défaut');
+    assert.equal(toggleBtn.getAttribute('aria-controls'), 'panel-alert-rtt');
+    assert.match(toggleBtn.innerHTML, /RTT : 6 j à poser avant le 31 déc\./);
+    assert.equal(panel.classList.contains('hidden'), true, 'Le panneau de détails doit être masqué au départ');
+
+    // Dépliage au toucher/clic sur l'en-tête
+    toggleBtn.click();
+    assert.equal(toggleBtn.getAttribute('aria-expanded'), 'true', 'aria-expanded doit passer à true');
+    assert.equal(panel.classList.contains('hidden'), false, 'Le panneau de détails doit être visible après clic');
+    assert.match(panel.innerHTML, /2026-12-31/);
+    assert.match(panel.innerHTML, /jours calendaires/);
+    assert.match(panel.innerHTML, /jours ouvrés disponibles/);
+
+    // Clic sur "Poser des RTT" : préremplit la modale sans la refermer ni créer d'absence immédiatement
+    const actionBtn = panel.children[0].children[1];
+    assert.ok(actionBtn, 'Le bouton Poser doit exister dans le panneau');
+    assert.equal(actionBtn.textContent, 'Poser des RTT');
+    actionBtn.click();
+    assert.equal(elementsById.get('type-absence').value, 'RTT', 'Le type RTT doit être prérempli dans la modale');
+    assert.equal(elementsById.get('form-absence').classList.contains('hidden'), false, 'La modale d’absence doit être ouverte');
+    assert.equal(panel.classList.contains('hidden'), false, 'Le clic sur Poser ne doit pas replier les détails de l’alerte');
+
+    // Second clic sur l'en-tête : repliement
+    toggleBtn.click();
+    assert.equal(toggleBtn.getAttribute('aria-expanded'), 'false');
+    assert.equal(panel.classList.contains('hidden'), true, 'Le panneau de détails se replie');
 
     // 2. Sauvegarder les paramètres depuis le panneau de configuration :
     // Vérifie que seuilAlerteJours et echeanceReportCP vont dans conges_rtt_prefs_v1 et PAS dans conges_rtt_data_v2 ni dans le POST Cloud
@@ -818,26 +847,28 @@ test('Lot D (UI & CSS) : mise à jour de stroke-dashoffset sur les jauges circul
     assert.ok(fab.classList.contains('fixed'), 'Le FAB doit être positionné en fixed');
     assert.ok(fab.classList.contains('md:hidden'), 'Le FAB doit être réservé au mobile (md:hidden)');
 
-    // 3. Vérifie la mise à jour de stroke-dashoffset sur les jauges circulaires SVG (CP = 14/29 -> 48%, RTT = 6/12 -> 50%)
-    const gaugeCp = elementsById.get('gauge-circle-cp');
-    const gaugeRtt = elementsById.get('gauge-circle-rtt');
-    assert.ok(gaugeCp && gaugeRtt, 'Les cercles SVG #gauge-circle-cp et #gauge-circle-rtt doivent exister');
+    // 3. Vérifie les barres de progression horizontales compactes (CP = 14/29 -> 48%, RTT = 6/12 -> 50%)
+    const progressCp = elementsById.get('progress-cp');
+    const progressRtt = elementsById.get('progress-rtt');
+    assert.ok(progressCp && progressRtt, 'Les barres de progression #progress-cp et #progress-rtt doivent exister');
 
-    // Circonférence = 251.33 ; RTT = 50% restant -> offset = 251.33 * (1 - 0.50) = 125.67
-    assert.equal(gaugeRtt.getAttribute('stroke-dashoffset'), '125.67');
-    assert.equal(elementsById.get('gauge-ratio-rtt').textContent, '6 / 12 j');
-    // CP = 14/29 -> 48% restant -> offset = 251.33 * (1 - 0.48) = 130.69
-    assert.equal(gaugeCp.getAttribute('stroke-dashoffset'), '130.69');
-    assert.equal(elementsById.get('gauge-ratio-cp').textContent, '14 / 29 j');
+    assert.equal(progressCp.style.width, '48%');
+    assert.equal(progressRtt.style.width, '50%');
+    assert.equal(elementsById.get('solde-cp').textContent, '14');
+    assert.equal(elementsById.get('total-cp').textContent, '29');
+    assert.equal(elementsById.get('pris-cp').textContent, '15');
+    assert.equal(elementsById.get('solde-rtt').textContent, '6');
+    assert.equal(elementsById.get('total-rtt').textContent, '12');
+    assert.equal(elementsById.get('pris-rtt').textContent, '6');
 
-    // 4. Passage en rouge (text-error) si solde négatif
+    // 4. Passage en rouge (text-error / bg-error) si solde négatif
     sandbox.__appTestHooks.setAppData({
         ...REAL_USER_DATA,
         configRTT: { '2026': 4 } // 6 jours pris sur 4 -> reste -2 (négatif)
     });
     assert.equal(elementsById.get('solde-rtt').textContent, '-2');
-    assert.equal(gaugeRtt.classList.contains('text-error'), true, 'La jauge circulaire RTT passe en rouge (text-error) si solde négatif');
-    assert.equal(gaugeRtt.getAttribute('stroke-dashoffset'), '0');
+    assert.equal(elementsById.get('solde-rtt').classList.contains('text-error'), true, 'Le solde négatif passe en rouge (text-error)');
+    assert.equal(progressRtt.classList.contains('bg-error'), true, 'La barre de progression RTT passe en rouge (bg-error) si solde négatif');
 
     // 5. Bascule manuelle du thème (Automatique / Clair / Sombre) mémorisée dans conges_rtt_prefs_v1 sans toucher à appData
     sandbox.changerThemePref('dark');
@@ -953,7 +984,7 @@ test('Lot E (UI) : affichage des statistiques annuelles sur le snapshot, export 
     assert.equal(elementsById.get('solde-cp').textContent, '14', 'L’application n’est jamais bloquée');
 });
 
-test('Navigation 4 onglets (Vue d’ensemble épurée, Calendrier, Simulateur & Ponts, Statistiques) et filtrage des ponts déjà passés', async () => {
+test('Navigation 4 onglets (Accueil avec calendrier, Historique, Simuler, Statistiques), bouton Aujourd’hui et filtrage des ponts déjà passés', async () => {
     const { sandbox, elementsById } = createAppSandbox({
         fetchImpl: async () => ({
             ok: true,
@@ -963,23 +994,48 @@ test('Navigation 4 onglets (Vue d’ensemble épurée, Calendrier, Simulateur & 
 
     await sandbox.__appTestHooks.initApp();
 
-    // 1. Par défaut, seul #tab-dashboard est visible ; #tab-calendar, #tab-simulator et #tab-stats sont masqués
+    // 1. Par défaut, seul #tab-dashboard (Accueil) est visible ; #tab-history, #tab-simulator et #tab-stats sont masqués
     assert.equal(elementsById.get('tab-dashboard').classList.contains('hidden'), false);
-    assert.equal(elementsById.get('tab-calendar').classList.contains('hidden'), true);
+    assert.equal(elementsById.get('tab-history').classList.contains('hidden'), true);
     assert.equal(elementsById.get('tab-simulator').classList.contains('hidden'), true);
     assert.equal(elementsById.get('tab-stats').classList.contains('hidden'), true);
 
-    // 2. Bascule sur l'onglet Simulateur & Ponts
+    // Vérifie la présence des composants déplacés
+    assert.ok(elementsById.get('calendar-grid-display'), 'Le calendrier #calendar-grid-display est présent sur l’Accueil');
+    assert.ok(elementsById.get('historique-list'), 'La liste d’historique #historique-list est présente dans son onglet');
+
+    // 2. Bouton "Aujourd'hui"
+    assert.equal(typeof sandbox.allerAuMoisCourant, 'function', 'La fonction allerAuMoisCourant doit exister');
+    sandbox.changeMonth(3);
+    sandbox.allerAuMoisCourant();
+    const now = new Date();
+    const expectedMonthLabel = now.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+    assert.equal(
+        elementsById.get('calendar-month-label-display').textContent.toLowerCase(),
+        expectedMonthLabel.toLowerCase(),
+        'Le bouton Aujourd’hui doit ramener le calendrier au mois courant'
+    );
+
+    // 3. Bascule sur l'onglet Historique
+    sandbox.showTab('history');
+    assert.equal(elementsById.get('tab-dashboard').classList.contains('hidden'), true);
+    assert.equal(elementsById.get('tab-history').classList.contains('hidden'), false);
+
+    // 4. Rétrocompatibilité : l'ancien appel showTab('calendar') redirige vers dashboard
+    sandbox.showTab('calendar');
+    assert.equal(elementsById.get('tab-dashboard').classList.contains('hidden'), false);
+
+    // 5. Bascule sur l'onglet Simulateur
     sandbox.showTab('simulator');
     assert.equal(elementsById.get('tab-dashboard').classList.contains('hidden'), true);
     assert.equal(elementsById.get('tab-simulator').classList.contains('hidden'), false);
 
-    // 3. Bascule sur l'onglet Statistiques
+    // 6. Bascule sur l'onglet Statistiques
     sandbox.showTab('stats');
     assert.equal(elementsById.get('tab-simulator').classList.contains('hidden'), true);
     assert.equal(elementsById.get('tab-stats').classList.contains('hidden'), false);
 
-    // 4. Au 2026-11-01, le pont passé du 2026-01-02 n'est plus proposé dans #bridges-list
+    // 7. Au 2026-11-01, le pont passé du 2026-01-02 n'est plus proposé dans #bridges-list
     sandbox.__appTestHooks.setReferenceDate('2026-11-01');
     const bridgeRows = elementsById.get('bridges-list').children;
     assert.equal(

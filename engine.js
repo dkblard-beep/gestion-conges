@@ -110,6 +110,51 @@
         return new Date(year, moisPaques - 1, jourPaques, 0, 0, 0, 0);
     }
 
+    const MOIS_NOMS_FR = [
+        'janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+        'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'
+    ];
+
+    /**
+     * Formate une plage de dates au format français naturel.
+     * Cas 1 (date unique) : "25 septembre 2026"
+     * Cas 2 (même mois et même année) : "5–9 octobre 2026"
+     * Cas 3 (mois différents, même année) : "28 octobre – 3 novembre 2026"
+     * Cas 4 (années différentes) : "28 décembre 2026 – 4 janvier 2027"
+     *
+     * @param {string|Date} startDateOrStr
+     * @param {string|Date} [endDateOrStr]
+     * @returns {string}
+     */
+    function formaterPlageDateFR(startDateOrStr, endDateOrStr) {
+        const d1 = startDateOrStr instanceof Date ? startDateOrStr : parseLocalDate(startDateOrStr);
+        if (!d1) return '';
+        const d2 = endDateOrStr
+            ? (endDateOrStr instanceof Date ? endDateOrStr : parseLocalDate(endDateOrStr))
+            : d1;
+
+        if (!d2 || d1.getTime() === d2.getTime()) {
+            return `${d1.getDate()} ${MOIS_NOMS_FR[d1.getMonth()]} ${d1.getFullYear()}`;
+        }
+
+        const startDay = d1.getDate();
+        const endDay = d2.getDate();
+        const startMonth = d1.getMonth();
+        const endMonth = d2.getMonth();
+        const startYear = d1.getFullYear();
+        const endYear = d2.getFullYear();
+
+        if (startYear === endYear && startMonth === endMonth) {
+            return `${startDay}–${endDay} ${MOIS_NOMS_FR[startMonth]} ${startYear}`;
+        }
+
+        if (startYear === endYear) {
+            return `${startDay} ${MOIS_NOMS_FR[startMonth]} – ${endDay} ${MOIS_NOMS_FR[endMonth]} ${startYear}`;
+        }
+
+        return `${startDay} ${MOIS_NOMS_FR[startMonth]} ${startYear} – ${endDay} ${MOIS_NOMS_FR[endMonth]} ${endYear}`;
+    }
+
     /**
      * Retourne la liste des jours fériés ("YYYY-MM-DD") pour une année donnée,
      * paramétrée via config.js (par défaut : lundiPentecoteTravaille = true).
@@ -1387,6 +1432,7 @@
         getAvailablePeriods,
         getDetailedCountdown,
         formatDetailedCountdown,
+        formaterPlageDateFR,
         compterJoursOuvresEntre,
         resolveCPDeadlineDate,
         calculerAlertesExpiration,

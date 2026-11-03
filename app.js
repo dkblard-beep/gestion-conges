@@ -868,7 +868,21 @@
     }
 
     /**
-     * Calcule et affiche les alertes d'expiration CP et RTT sur le tableau de bord (Lot B).
+     * Formate une date YYYY-MM-DD en date courte française (ex: "31 déc.", "31 mai").
+     */
+    function formatShortDateFR(dateStr) {
+        if (!dateStr || typeof dateStr !== 'string') return '';
+        const parts = dateStr.split('-');
+        if (parts.length !== 3) return dateStr;
+        const day = parseInt(parts[2], 10);
+        const monthIdx = parseInt(parts[1], 10) - 1;
+        const moisCourts = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+        return `${day} ${moisCourts[monthIdx] || parts[1]}`;
+    }
+
+    /**
+     * Calcule et affiche les alertes d'expiration CP et RTT sur le tableau de bord (Lot B & Ajustement mobile).
+     * Alertes compactes et dépliables individuellement, avec texte court dynamique et accessibilité complète.
      * Utilise la date de référence injectée (`injectedReferenceDate`) ou la date du jour.
      */
     function renderExpirationAlerts(customReferenceDate) {
@@ -891,31 +905,95 @@
         DOM.expirationAlerts.classList.remove('hidden');
         result.alerts.forEach(alertItem => {
             const isRtt = alertItem.type === 'RTT';
+            const typeKey = alertItem.type.toLowerCase();
+            const panelId = `panel-alert-${typeKey}`;
+            const buttonId = `btn-alert-toggle-${typeKey}`;
+            const resteStr = formatDaysNumber(alertItem.reste);
+            const shortDeadline = formatShortDateFR(alertItem.deadline);
+
             const card = document.createElement('div');
             card.dataset.alertType = alertItem.type;
             card.className = isRtt
-                ? 'flex items-start justify-between gap-3 px-4 py-3 rounded-xl bg-error-light border border-error/20 text-on-error-container text-sm shadow-sm'
-                : 'flex items-start justify-between gap-3 px-4 py-3 rounded-xl bg-primary-light border border-primary/30 text-on-primary-container text-sm shadow-sm';
+                ? 'rounded-xl border border-emerald-200 bg-emerald-50/80 text-emerald-950 dark:bg-emerald-950/30 dark:border-emerald-800/60 dark:text-emerald-100 transition-colors shadow-sm overflow-hidden'
+                : 'rounded-xl border border-indigo-200 bg-indigo-50/80 text-indigo-950 dark:bg-indigo-950/30 dark:border-indigo-800/60 dark:text-indigo-100 transition-colors shadow-sm overflow-hidden';
 
-            card.innerHTML = `
-                <div class="flex items-start gap-2.5">
-                    <span class="material-symbols-outlined text-[20px] shrink-0 mt-0.5">${isRtt ? 'schedule' : 'event_upcoming'}</span>
-                    <div>
-                        <div class="font-bold">Échéance ${alertItem.type} proche (${alertItem.deadline})</div>
-                        <div class="text-xs mt-0.5">${alertItem.message}</div>
-                    </div>
-                </div>
-                <button type="button" class="btn-secondary !py-1 !px-2.5 text-xs shrink-0">Poser</button>
+            const iconName = isRtt ? 'schedule' : 'event_upcoming';
+            const iconColor = isRtt ? 'text-emerald-700 dark:text-emerald-400' : 'text-indigo-600 dark:text-indigo-400';
+
+            // 1. Bouton d'en-tête accessible (dépliage / repliage au clic ou au clavier)
+            const toggleBtn = document.createElement('button');
+            toggleBtn.type = 'button';
+            toggleBtn.id = buttonId;
+            toggleBtn.setAttribute('aria-expanded', 'false');
+            toggleBtn.setAttribute('aria-controls', panelId);
+            toggleBtn.className = 'w-full flex items-center justify-between gap-2 p-2.5 sm:px-3 text-left cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 transition-colors focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary/40';
+
+            const headerContent = document.createElement('div');
+            headerContent.className = 'flex items-center gap-2 min-w-0 flex-1';
+
+            const iconSpan = document.createElement('span');
+            iconSpan.className = `material-symbols-outlined text-[18px] sm:text-[20px] shrink-0 ${iconColor}`;
+            iconSpan.textContent = iconName;
+
+            const textSpan = document.createElement('span');
+            textSpan.className = 'text-xs sm:text-sm font-semibold leading-snug break-words flex-1 text-slate-900 dark:text-slate-100';
+            textSpan.textContent = `${alertItem.type} : ${resteStr} j à poser avant le ${shortDeadline}`;
+
+            headerContent.appendChild(iconSpan);
+            headerContent.appendChild(textSpan);
+
+            const chevron = document.createElement('span');
+            chevron.className = 'material-symbols-outlined text-[18px] sm:text-[20px] shrink-0 transition-transform duration-200 text-slate-500 dark:text-slate-400';
+            chevron.textContent = 'expand_more';
+
+            toggleBtn.appendChild(headerContent);
+            toggleBtn.appendChild(chevron);
+
+            // 2. Panneau de détails dépliable (jours calendaires, jours ouvrés et bouton Poser)
+            const panel = document.createElement('div');
+            panel.id = panelId;
+            panel.setAttribute('role', 'region');
+            panel.setAttribute('aria-labelledby', buttonId);
+            panel.className = 'hidden px-2.5 sm:px-3 pb-2.5 sm:pb-3 pt-1 border-t border-slate-200/50 dark:border-slate-700/50 text-xs';
+
+            const panelContent = document.createElement('div');
+            panelContent.className = 'flex flex-col sm:flex-row sm:items-center justify-between gap-2.5';
+
+            const detailsTextDiv = document.createElement('div');
+            detailsTextDiv.className = 'space-y-0.5 text-slate-700 dark:text-slate-300';
+            detailsTextDiv.innerHTML = `
+                <div>Échéance le <strong>${alertItem.deadline}</strong> (${alertItem.joursCalendairesRestants} jour${alertItem.joursCalendairesRestants > 1 ? 's' : ''} calendaire${alertItem.joursCalendairesRestants > 1 ? 's' : ''})</div>
+                <div class="text-[11px] text-slate-500 dark:text-slate-400">${alertItem.joursOuvresRestants} jour${alertItem.joursOuvresRestants > 1 ? 's' : ''} ouvré${alertItem.joursOuvresRestants > 1 ? 's' : ''} disponible${alertItem.joursOuvresRestants > 1 ? 's' : ''}</div>
             `;
 
-            const actionBtn = card.querySelector('button');
-            if (actionBtn) {
-                actionBtn.addEventListener('click', () => {
-                    if (DOM.typeAbsence) DOM.typeAbsence.value = alertItem.type;
-                    root.preparerAbsence(1);
-                });
-            }
+            const actionBtn = document.createElement('button');
+            actionBtn.type = 'button';
+            actionBtn.className = 'btn-primary !py-1 !px-3 text-xs self-start sm:self-auto shrink-0 cursor-pointer';
+            actionBtn.textContent = `Poser des ${alertItem.type}`;
 
+            panelContent.appendChild(detailsTextDiv);
+            panelContent.appendChild(actionBtn);
+            panel.appendChild(panelContent);
+
+            // Événement déplier/replier
+            toggleBtn.addEventListener('click', () => {
+                const isExpanded = toggleBtn.getAttribute('aria-expanded') === 'true';
+                toggleBtn.setAttribute('aria-expanded', String(!isExpanded));
+                panel.classList.toggle('hidden', isExpanded);
+                chevron.classList.toggle('rotate-180', !isExpanded);
+            });
+
+            // Événement ouvrir modale sans replier l'alerte
+            actionBtn.addEventListener('click', (e) => {
+                if (e && typeof e.stopPropagation === 'function') {
+                    e.stopPropagation();
+                }
+                if (DOM.typeAbsence) DOM.typeAbsence.value = alertItem.type;
+                root.preparerAbsence(1);
+            });
+
+            card.appendChild(toggleBtn);
+            card.appendChild(panel);
             DOM.expirationAlerts.appendChild(card);
         });
 
@@ -1301,9 +1379,11 @@
         renderFermeturesList();
     };
 
-    // ─── Navigation Onglets ───
-    root.showTab = function (tabName) {
-        const tabs = ['dashboard', 'calendar', 'simulator', 'stats'];
+    // ─── Navigation Onglets (Accueil / Historique / Simuler / Statistiques) ───
+    root.showTab = function (rawTabName) {
+        // Redirection rétrocompatible : l'ancien onglet 'calendar' pointe vers 'dashboard' (où réside le calendrier)
+        const tabName = rawTabName === 'calendar' ? 'dashboard' : rawTabName;
+        const tabs = ['dashboard', 'history', 'simulator', 'stats'];
         tabs.forEach(t => {
             const el = document.getElementById(`tab-${t}`);
             if (el) {
@@ -1318,14 +1398,17 @@
             }
         });
 
+        // Gérer aussi l'ancien id de bouton nav-calendar pour les tests ou intégrations existantes
+        const legacyNavCalendar = document.getElementById('nav-calendar');
+        if (legacyNavCalendar && tabName !== 'dashboard') {
+            legacyNavCalendar.classList.remove('text-primary', 'bg-primary-light');
+            legacyNavCalendar.classList.add('text-slate-600');
+        }
+
         const activeEl = document.getElementById(`tab-${tabName}`);
         if (activeEl) {
             activeEl.classList.remove('hidden');
-            if (tabName === 'calendar') {
-                activeEl.classList.add('flex');
-            } else {
-                activeEl.classList.add('block');
-            }
+            activeEl.classList.add('block');
         }
 
         const activeNav = document.getElementById(`nav-${tabName}`);
@@ -1336,6 +1419,11 @@
     };
 
     // ─── Calendrier branché sur AppEngine ───
+    root.allerAuMoisCourant = function () {
+        currentCalendarDate = new Date();
+        renderCalendar();
+    };
+
     root.changeMonth = function (offset) {
         currentCalendarDate.setMonth(currentCalendarDate.getMonth() + offset);
         renderCalendar();
@@ -1913,9 +2001,7 @@
                 ? periodsCovered.join(' & ')
                 : (a.type === 'CP' ? AppEngine.formatCPPeriod(AppEngine.getCPPeriod(a.date)) : AppEngine.getRTTPeriod(a.date));
 
-            const rangeLabel = expanded.effectiveStartDate !== expanded.endDate
-                ? `Du ${expanded.effectiveStartDate} au ${expanded.endDate}`
-                : `Le ${expanded.effectiveStartDate}`;
+            const rangeLabel = AppEngine.formaterPlageDateFR(expanded.effectiveStartDate, expanded.endDate);
 
             const iconBgClass = a.type === 'CP'
                 ? 'badge-cp'
@@ -1931,20 +2017,20 @@
             const isConfirmingThis = isDeleteUnlocked && pendingDeleteConfirmId === a.id;
 
             item.innerHTML = `
-                <div class="flex items-start gap-3">
+                <div class="flex items-start gap-3 min-w-0 pr-2">
                     <div class="w-10 h-10 rounded-lg ${iconBgClass} flex flex-col items-center justify-center shrink-0">
                         <span class="font-bold leading-none">${day}</span>
                         <span class="text-[9px] uppercase tracking-wider">${month}</span>
                     </div>
-                    <div>
-                        <div class="flex items-center gap-2">
-                            <h4 class="font-semibold text-on-surface">${rangeLabel}</h4>
-                            <span class="px-2 py-0.5 rounded-full ${badgeBgClass} text-xs font-semibold">${a.type}</span>
+                    <div class="min-w-0">
+                        <div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                            <h4 class="font-semibold text-on-surface leading-snug break-words">${rangeLabel}</h4>
+                            <span class="px-2 py-0.5 rounded-full ${badgeBgClass} text-xs font-semibold shrink-0">${a.type}</span>
                         </div>
                         <p class="text-xs text-on-surface-variant mt-0.5">${dureeStr} jour${a.duree > 1 ? 's' : ''} • ${periodTag}</p>
                     </div>
                 </div>
-                <div class="flex items-center gap-1">
+                <div class="flex items-center gap-1 shrink-0">
                     <button type="button" data-action="edit" title="Modifier cette demande" class="text-on-surface-variant hover:text-primary transition-colors p-2 rounded-full hover:bg-primary-light cursor-pointer" aria-label="Modifier">
                         <span class="material-symbols-outlined text-[20px]">edit</span>
                     </button>
