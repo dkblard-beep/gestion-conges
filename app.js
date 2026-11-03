@@ -129,6 +129,16 @@
         DOM.statsTotalAnnee     = document.getElementById('stats-total-annee');
         DOM.statsTotalAnneeDetail = document.getElementById('stats-total-annee-detail');
         DOM.statsMensuellesGrid = document.getElementById('stats-mensuelles-grid');
+        DOM.fermetureEditId     = document.getElementById('fermeture-edit-id');
+        DOM.fermetureDebut      = document.getElementById('fermeture-debut');
+        DOM.fermetureFin        = document.getElementById('fermeture-fin');
+        DOM.fermetureLibelle    = document.getElementById('fermeture-libelle');
+        DOM.fermeturesList      = document.getElementById('fermetures-list');
+        DOM.fermeturesVide      = document.getElementById('fermetures-vide');
+        DOM.fermetureError     = document.getElementById('fermeture-error');
+        DOM.btnSaveFermeture    = document.getElementById('btn-save-fermeture');
+        DOM.btnSaveFermetureLabel = document.getElementById('btn-save-fermeture-label');
+        DOM.btnCancelFermeture  = document.getElementById('btn-cancel-fermeture');
     }
 
     let appData = AppConfig.createEmptyData();
@@ -151,10 +161,14 @@
     let lastSimulationResult = null;              // Dernier résultat de simulation (immuable, sans effet sur appData)
 
     /**
-     * Retourne les options de jours fériés actives (lundiPentecoteTravaille configurable, true par défaut).
+     * Retourne les options de jours fériés et fermetures d'entreprise actives.
      */
     function getActiveFeriesOptions() {
-        return AppConfig.getFeriesOptions(appData && appData.configFeries ? appData.configFeries : {});
+        const base = AppConfig.getFeriesOptions(appData && appData.configFeries ? appData.configFeries : {});
+        return {
+            ...base,
+            joursFermeture: (alertPrefs && Array.isArray(alertPrefs.joursFermeture)) ? alertPrefs.joursFermeture : []
+        };
     }
 
     /**
@@ -523,13 +537,15 @@
     };
 
     /**
-     * Exporte les données actives (et les deux versions en cas de conflit) sous forme de fichier JSON.
+     * Exporte les données actives (et les deux versions en cas de conflit) sous forme de fichier JSON,
+     * en incluant les préférences locales (fermetures, alertes, thème).
      */
     root.exporterDonneesJSON = function () {
         const exportPayload = {
             exportedAt: new Date().toISOString(),
             activeData: appData,
-            pendingConflict: pendingConflict || null
+            pendingConflict: pendingConflict || null,
+            preferences: alertPrefs || null
         };
         const jsonStr = JSON.stringify(exportPayload, null, 2);
 
@@ -962,7 +978,9 @@
 
         if (DOM.simResultShift) {
             if (result.shifted) {
-                const raisonLabel = result.shiftReason === 'ferie' ? 'jour férié' : 'week-end';
+                const raisonLabel = result.shiftReason === 'ferie'
+                    ? 'jour férié'
+                    : (result.shiftReason === 'fermeture' ? 'jour de fermeture d’entreprise' : 'week-end');
                 DOM.simResultShift.textContent =
                     `Décalage automatique : le ${result.originalDate} tombe un ${raisonLabel}, début effectif au ${result.effectiveStartDate}.`;
                 DOM.simResultShift.classList.remove('hidden');
@@ -1280,6 +1298,7 @@
         updateRetraite();
         renderCalendar();
         renderBackupHistory();
+        renderFermeturesList();
     };
 
     // ─── Navigation Onglets ───
@@ -1329,6 +1348,7 @@
         const feriesOpts = getActiveFeriesOptions();
         const feries = AppEngine.getJoursFeries(year, feriesOpts);
         const coveredDaysMap = AppEngine.buildCalendarCoveredDays(appData.absences || [], feriesOpts);
+        const closureDatesMap = AppEngine.buildClosureDatesMap(feriesOpts.joursFermeture);
 
         if (DOM.calendarMonthLabel) {
             DOM.calendarMonthLabel.textContent = new Date(year, month, 1).toLocaleDateString('fr-FR', {
@@ -1357,6 +1377,8 @@
             const isToday = currentDate.getTime() === today.getTime();
             const dateStr = AppEngine.formatLocalDate(currentDate);
             const isFerie = feries.includes(dateStr);
+            const isClosure = closureDatesMap.has(dateStr);
+            const closureLabel = isClosure ? closureDatesMap.get(dateStr) : '';
             const coveredInfo = coveredDaysMap.get(dateStr);
 
             const dayBtn = document.createElement('button');
@@ -1366,6 +1388,13 @@
 
             if (isFerie) {
                 baseClass += ' bg-error-container/30 text-on-error-container';
+            } else if (isClosure && coveredInfo && coveredInfo.entries.length > 0) {
+                // Fermeture avec congé posé dessus : motif hachuré suivant la couleur du congé (Point 6)
+                const firstType = coveredInfo.entries[0].absence.type;
+                baseClass += firstType === 'CP' ? ' cal-day-closure-cp' : ' cal-day-closure-rtt';
+            } else if (isClosure) {
+                // Fermeture sans congé : motif hachuré neutre
+                baseClass += ' cal-day-closure';
             } else if (coveredInfo && coveredInfo.entries.length > 0) {
                 const firstType = coveredInfo.entries[0].absence.type;
                 baseClass += firstType === 'CP' ? ' cal-day-cp' : ' cal-day-rtt';
@@ -1383,6 +1412,15 @@
             if (isFerie) {
                 contentHTML += `<span class="text-[9px] font-semibold text-on-error-container leading-none mt-0.5">Férié</span>`;
                 dayBtn.title = 'Jour férié chômé';
+            } else if (isClosure && coveredInfo && coveredInfo.entries.length > 0) {
+                const types = Array.from(new Set(coveredInfo.entries.map(e => e.absence.type)));
+                const labelType = types.join('+');
+                const dotColor = types[0] === 'CP' ? 'bg-indigo-600' : 'bg-emerald-700';
+                contentHTML += `<span class="flex items-center gap-1 text-[9px] font-bold leading-none mt-0.5"><span class="w-1.5 h-1.5 rounded-full ${dotColor}"></span>${labelType} (Fermé)</span>`;
+                dayBtn.title = `Fermeture entreprise : ${closureLabel || 'Fermé'} — Congé ${labelType}`;
+            } else if (isClosure) {
+                contentHTML += `<span class="text-[9px] font-semibold opacity-85 leading-none mt-0.5">Fermé</span>`;
+                dayBtn.title = `Fermeture entreprise : ${closureLabel || 'Fermé'}`;
             } else if (coveredInfo && coveredInfo.entries.length > 0) {
                 const types = Array.from(new Set(coveredInfo.entries.map(e => e.absence.type)));
                 const labelType = types.join('+');
@@ -1604,7 +1642,9 @@
         }
 
         if (validation.shifted) {
-            const raisonLabel = validation.shiftReason === 'ferie' ? 'jour férié' : 'week-end';
+            const raisonLabel = validation.shiftReason === 'ferie'
+                ? 'jour férié'
+                : (validation.shiftReason === 'fermeture' ? 'jour de fermeture d’entreprise' : 'week-end');
             DOM.previewShift.textContent = `Décalage automatique : le ${validation.originalDate} tombe un ${raisonLabel}, début reporté au ${validation.effectiveStartDate}.`;
             DOM.previewShift.classList.remove('hidden');
         } else {
@@ -1987,6 +2027,167 @@
     };
     const hideError = root.hideError;
 
+    // ─── Gestion des Jours de Fermeture d'Entreprise ───
+    root.enregistrerFermeture = function () {
+        if (!DOM.fermetureDebut || !DOM.fermetureFin) return false;
+        const debut = DOM.fermetureDebut.value;
+        const fin = DOM.fermetureFin.value || debut;
+        const libelle = DOM.fermetureLibelle ? DOM.fermetureLibelle.value.trim() : '';
+        const editId = DOM.fermetureEditId ? DOM.fermetureEditId.value : '';
+
+        if (!debut || !fin) {
+            if (DOM.fermetureError) {
+                DOM.fermetureError.textContent = 'Veuillez saisir une date de début et de fin.';
+                DOM.fermetureError.classList.remove('hidden');
+            }
+            return false;
+        }
+
+        const dDebut = AppEngine.parseLocalDate(debut);
+        const dFin = AppEngine.parseLocalDate(fin);
+        if (!dDebut || !dFin) {
+            if (DOM.fermetureError) {
+                DOM.fermetureError.textContent = 'Dates de fermeture invalides.';
+                DOM.fermetureError.classList.remove('hidden');
+            }
+            return false;
+        }
+
+        const rangeStart = debut <= fin ? debut : fin;
+        const rangeEnd = debut <= fin ? fin : debut;
+
+        if (DOM.fermetureError) {
+            DOM.fermetureError.textContent = '';
+            DOM.fermetureError.classList.add('hidden');
+        }
+
+        const currentList = Array.isArray(alertPrefs.joursFermeture) ? [...alertPrefs.joursFermeture] : [];
+        if (editId) {
+            // Modification : conserve l'id existant (Ajustement #1)
+            const idx = currentList.findIndex(f => String(f.id) === String(editId));
+            if (idx >= 0) {
+                currentList[idx] = {
+                    id: editId,
+                    debut: rangeStart,
+                    fin: rangeEnd,
+                    libelle
+                };
+            } else {
+                currentList.push({
+                    id: editId,
+                    debut: rangeStart,
+                    fin: rangeEnd,
+                    libelle
+                });
+            }
+        } else {
+            // Ajout d'une nouvelle fermeture
+            const newId = `closure-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+            currentList.push({
+                id: newId,
+                debut: rangeStart,
+                fin: rangeEnd,
+                libelle
+            });
+        }
+
+        sauvegarderPreferencesAlertes({ joursFermeture: currentList });
+        root.annulerEditionFermeture();
+        root.mettreAJourAffichage();
+        return true;
+    };
+
+    root.editerFermeture = function (id) {
+        const currentList = Array.isArray(alertPrefs.joursFermeture) ? alertPrefs.joursFermeture : [];
+        const item = currentList.find(f => String(f.id) === String(id));
+        if (!item) return;
+
+        if (DOM.fermetureEditId) DOM.fermetureEditId.value = String(item.id);
+        if (DOM.fermetureDebut) DOM.fermetureDebut.value = item.debut;
+        if (DOM.fermetureFin) DOM.fermetureFin.value = item.fin;
+        if (DOM.fermetureLibelle) DOM.fermetureLibelle.value = item.libelle || '';
+
+        if (DOM.btnSaveFermetureLabel) DOM.btnSaveFermetureLabel.textContent = 'Mettre à jour la fermeture';
+        if (DOM.btnCancelFermeture) DOM.btnCancelFermeture.classList.remove('hidden');
+        if (DOM.fermetureError) {
+            DOM.fermetureError.textContent = '';
+            DOM.fermetureError.classList.add('hidden');
+        }
+    };
+
+    root.annulerEditionFermeture = function () {
+        if (DOM.fermetureEditId) DOM.fermetureEditId.value = '';
+        if (DOM.fermetureDebut) DOM.fermetureDebut.value = '';
+        if (DOM.fermetureFin) DOM.fermetureFin.value = '';
+        if (DOM.fermetureLibelle) DOM.fermetureLibelle.value = '';
+
+        if (DOM.btnSaveFermetureLabel) DOM.btnSaveFermetureLabel.textContent = 'Ajouter une fermeture';
+        if (DOM.btnCancelFermeture) DOM.btnCancelFermeture.classList.add('hidden');
+        if (DOM.fermetureError) {
+            DOM.fermetureError.textContent = '';
+            DOM.fermetureError.classList.add('hidden');
+        }
+    };
+
+    root.supprimerFermeture = function (id) {
+        const currentList = Array.isArray(alertPrefs.joursFermeture) ? alertPrefs.joursFermeture : [];
+        const updated = currentList.filter(f => String(f.id) !== String(id));
+        sauvegarderPreferencesAlertes({ joursFermeture: updated });
+        if (DOM.fermetureEditId && DOM.fermetureEditId.value === String(id)) {
+            root.annulerEditionFermeture();
+        }
+        root.mettreAJourAffichage();
+        return true;
+    };
+
+    function renderFermeturesList() {
+        if (!DOM.fermeturesList || !DOM.fermeturesVide) return;
+        DOM.fermeturesList.innerHTML = '';
+
+        const list = Array.isArray(alertPrefs.joursFermeture) ? alertPrefs.joursFermeture : [];
+        if (list.length === 0) {
+            DOM.fermeturesVide.classList.remove('hidden');
+            return;
+        }
+        DOM.fermeturesVide.classList.add('hidden');
+
+        list.forEach(item => {
+            const row = document.createElement('div');
+            row.className = 'p-3 flex items-center justify-between gap-3 text-xs hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors';
+            const rangeStr = item.debut === item.fin
+                ? `Le ${item.debut}`
+                : `Du ${item.debut} au ${item.fin}`;
+            const labelStr = item.libelle ? ` — ${item.libelle}` : '';
+
+            row.innerHTML = `
+                <div class="flex items-center gap-2 min-w-0">
+                    <span class="w-3 h-3 rounded cal-day-closure border shrink-0"></span>
+                    <span class="font-semibold text-slate-800 dark:text-slate-100">${rangeStr}</span>
+                    <span class="text-slate-500 dark:text-slate-400 truncate">${labelStr}</span>
+                </div>
+                <div class="flex items-center gap-1 shrink-0">
+                    <button type="button" data-action="edit-closure" title="Modifier cette fermeture" class="p-1.5 rounded-lg text-slate-500 hover:text-primary hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer" aria-label="Modifier">
+                        <span class="material-symbols-outlined text-[18px]">edit</span>
+                    </button>
+                    <button type="button" data-action="delete-closure" title="Supprimer cette fermeture" class="p-1.5 rounded-lg text-slate-500 hover:text-error hover:bg-error-light/30 dark:hover:bg-error-light/10 cursor-pointer" aria-label="Supprimer">
+                        <span class="material-symbols-outlined text-[18px]">delete</span>
+                    </button>
+                </div>
+            `;
+
+            const editBtn = row.querySelector('[data-action="edit-closure"]');
+            if (editBtn) {
+                editBtn.addEventListener('click', () => root.editerFermeture(item.id));
+            }
+            const delBtn = row.querySelector('[data-action="delete-closure"]');
+            if (delBtn) {
+                delBtn.addEventListener('click', () => root.supprimerFermeture(item.id));
+            }
+
+            DOM.fermeturesList.appendChild(row);
+        });
+    }
+
     // Exposition d'accesseurs d'état pour les tests d'intégration
     root.__appTestHooks = {
         initApp,
@@ -2024,7 +2225,11 @@
             if (period !== undefined) historyFilterPeriod = period;
             renderHistorique();
         },
-        getLastSimulationResult: () => lastSimulationResult
+        getLastSimulationResult: () => lastSimulationResult,
+        setCalendarDate: (dateOrStr) => {
+            currentCalendarDate = dateOrStr instanceof Date ? new Date(dateOrStr) : (AppEngine.parseLocalDate(dateOrStr) || new Date(dateOrStr));
+            renderCalendar();
+        }
     };
 
     if (typeof document !== 'undefined') {

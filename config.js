@@ -24,19 +24,49 @@
     // Types d'absences autorisés
     const TYPES_VALIDES = new Set(['CP', 'RTT']);
 
-    // Configuration par défaut des alertes d'expiration et du thème (Lot B & Lot D — stockée hors de appData dans PREFS_STORAGE_KEY)
+    // Configuration par défaut des alertes d'expiration, fermetures et thème (stockée hors de appData dans PREFS_STORAGE_KEY)
     const THEMES_VALIDES = new Set(['auto', 'light', 'dark']);
     const DEFAULT_ALERT_OPTIONS = Object.freeze({
         seuilAlerteJours: 60,
         echeanceReportCP: '05-31',
         theme: 'auto',
-        rappelOuvertureActif: false
+        rappelOuvertureActif: false,
+        joursFermeture: Object.freeze([])
     });
 
     /**
-     * Valide et normalise les préférences locales (seuil d'alerte, échéance MM-DD de report CP, et thème 'auto' | 'light' | 'dark').
+     * Valide et normalise une liste de fermetures d'entreprise (plages début-fin et libellé optionnel).
+     * @param {Array} [rawList]
+     * @returns {Array<{ id: string|number, debut: string, fin: string, libelle: string }>}
+     */
+    function normaliserJoursFermeture(rawList) {
+        if (!Array.isArray(rawList)) return [];
+        const result = [];
+        for (const item of rawList) {
+            if (!item || typeof item !== 'object') continue;
+            const debut = typeof item.debut === 'string' ? item.debut.trim() : '';
+            const fin = typeof item.fin === 'string' ? item.fin.trim() : (typeof item.dateFin === 'string' ? item.dateFin.trim() : debut);
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(debut) || !/^\d{4}-\d{2}-\d{2}$/.test(fin)) continue;
+            const rangeStart = debut <= fin ? debut : fin;
+            const rangeEnd = debut <= fin ? fin : debut;
+            const libelle = typeof item.libelle === 'string'
+                ? item.libelle.trim().replace(/<[^>]*>/g, '').slice(0, 100)
+                : '';
+            const id = item.id !== undefined && item.id !== null ? String(item.id) : `closure-${rangeStart}-${rangeEnd}-${Math.random().toString(36).slice(2, 7)}`;
+            result.push({
+                id,
+                debut: rangeStart,
+                fin: rangeEnd,
+                libelle
+            });
+        }
+        return result;
+    }
+
+    /**
+     * Valide et normalise les préférences locales (seuil d'alerte, échéance MM-DD de report CP, thème, rappel, fermetures).
      * @param {Object} [customPrefs]
-     * @returns {{ seuilAlerteJours: number, echeanceReportCP: string, theme: string }}
+     * @returns {{ seuilAlerteJours: number, echeanceReportCP: string, theme: string, rappelOuvertureActif: boolean, joursFermeture: Array }}
      */
     function getAlertOptions(customPrefs = {}) {
         const rawSeuil = Number(customPrefs && customPrefs.seuilAlerteJours);
@@ -63,11 +93,14 @@
             : DEFAULT_ALERT_OPTIONS.theme;
         const theme = THEMES_VALIDES.has(rawTheme) ? rawTheme : DEFAULT_ALERT_OPTIONS.theme;
 
+        const joursFermeture = normaliserJoursFermeture(customPrefs && customPrefs.joursFermeture);
+
         return {
             seuilAlerteJours,
             echeanceReportCP,
             theme,
-            rappelOuvertureActif: Boolean(customPrefs && customPrefs.rappelOuvertureActif)
+            rappelOuvertureActif: Boolean(customPrefs && customPrefs.rappelOuvertureActif),
+            joursFermeture
         };
     }
 
@@ -477,6 +510,7 @@
         TYPES_VALIDES,
         THEMES_VALIDES,
         DEFAULT_ALERT_OPTIONS,
+        normaliserJoursFermeture,
         getAlertOptions,
         DEFAULT_FERIES_OPTIONS,
         getFeriesOptions,

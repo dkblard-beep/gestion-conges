@@ -409,7 +409,7 @@ test('Service Worker (sw.js) : inclut config.js et engine.js et ne supprime que 
                 addAll: async (urls) => { addedUrls.push(...urls); },
                 put: async () => {}
             }),
-            keys: async () => ['conges-pwa-cache-v12', 'conges-pwa-cache-v18', 'conges-pwa-cache-v19', 'conges-pwa-cache-v20', 'conges-pwa-cache-v21', 'autre-app-cache-v1'],
+            keys: async () => ['conges-pwa-cache-v12', 'conges-pwa-cache-v18', 'conges-pwa-cache-v19', 'conges-pwa-cache-v20', 'conges-pwa-cache-v21', 'conges-pwa-cache-v22', 'autre-app-cache-v1'],
             delete: async (name) => { deletedCaches.push(name); return true; },
             match: async () => null
         },
@@ -431,15 +431,15 @@ test('Service Worker (sw.js) : inclut config.js et engine.js et ne supprime que 
     assert.ok(addedUrls.includes('./engine.js'), 'sw.js doit mettre en cache ./engine.js');
     assert.ok(addedUrls.includes('./app.js'), 'sw.js doit mettre en cache ./app.js');
 
-    // 2. Test activate : supprime conges-pwa-cache-v12 mais conserve conges-pwa-cache-v13 et autre-app-cache-v1
+    // 2. Test activate : supprime tous les anciens caches conges-pwa-cache-* mais conserve conges-pwa-cache-v22 et autre-app-cache-v1
     let activatePromise;
     listeners.activate({ waitUntil: (p) => { activatePromise = p; } });
     await activatePromise;
 
     assert.deepEqual(
         deletedCaches,
-        ['conges-pwa-cache-v12', 'conges-pwa-cache-v18', 'conges-pwa-cache-v19', 'conges-pwa-cache-v20'],
-        'Tous les anciens caches conges-pwa-cache-* (v12, v18, v19, v20) doivent être purgés en conservant v21 et les caches tiers'
+        ['conges-pwa-cache-v12', 'conges-pwa-cache-v18', 'conges-pwa-cache-v19', 'conges-pwa-cache-v20', 'conges-pwa-cache-v21'],
+        'Tous les anciens caches conges-pwa-cache-* (v12 à v21) doivent être purgés en conservant v22 et les caches tiers'
     );
 });
 
@@ -987,6 +987,101 @@ test('Navigation 4 onglets (Vue d’ensemble épurée, Calendrier, Simulateur & 
         false,
         'Le pont déjà passé du 02/01/2026 ne doit plus être suggéré en novembre 2026'
     );
+});
+
+test('Fermetures d’entreprise (UI) : ajout, modification (maintien de l’id), suppression, motif hachuré dans le calendrier et inclusion dans export JSON', async () => {
+    const { sandbox, elementsById, localStorage } = createAppSandbox({
+        fetchImpl: async () => ({
+            ok: true,
+            json: async () => structuredClone(REAL_USER_DATA)
+        })
+    });
+
+    await sandbox.__appTestHooks.initApp();
+
+    // 1. Ajout d'une fermeture dans Paramètres
+    elementsById.get('fermeture-debut').value = '2026-08-10';
+    elementsById.get('fermeture-fin').value = '2026-08-14';
+    elementsById.get('fermeture-libelle').value = 'Fermeture été';
+    const added = sandbox.enregistrerFermeture();
+    assert.equal(added, true, 'L’ajout de fermeture doit réussir');
+
+    const prefsApresAjout = JSON.parse(localStorage.getItem('conges_rtt_prefs_v1'));
+    assert.equal(prefsApresAjout.joursFermeture.length, 1);
+    assert.equal(prefsApresAjout.joursFermeture[0].debut, '2026-08-10');
+    assert.equal(prefsApresAjout.joursFermeture[0].fin, '2026-08-14');
+    assert.equal(prefsApresAjout.joursFermeture[0].libelle, 'Fermeture été');
+    const closureId = prefsApresAjout.joursFermeture[0].id;
+
+    // 2. Modification de la fermeture (Ajustement #1 : conserve l'id existant)
+    sandbox.editerFermeture(closureId);
+    assert.equal(elementsById.get('fermeture-edit-id').value, String(closureId));
+    assert.equal(elementsById.get('fermeture-debut').value, '2026-08-10');
+    elementsById.get('fermeture-fin').value = '2026-08-17'; // prolongé jusqu'au 17
+    elementsById.get('fermeture-libelle').value = 'Fermeture estivale prolongée';
+    const updated = sandbox.enregistrerFermeture();
+    assert.equal(updated, true);
+
+    const prefsApresModif = JSON.parse(localStorage.getItem('conges_rtt_prefs_v1'));
+    assert.equal(prefsApresModif.joursFermeture.length, 1, 'La liste doit toujours contenir 1 seule fermeture');
+    assert.equal(prefsApresModif.joursFermeture[0].id, closureId, 'L’id doit être conservé');
+    assert.equal(prefsApresModif.joursFermeture[0].fin, '2026-08-17');
+    assert.equal(prefsApresModif.joursFermeture[0].libelle, 'Fermeture estivale prolongée');
+
+    // 3. Calendrier : rendu avec motif hachuré et couleur selon présence d'un congé (Point 6)
+    // Dans REAL_USER_DATA, il y a un CP du 2026-08-03 au 2026-08-14 (10j)
+    // Au mois d'août 2026 :
+    // Le 10/08 est couvert par le CP ET est une fermeture -> classe cal-day-closure-cp (motif indigo hachuré)
+    // Le 17/08 est une fermeture SANS congé -> classe cal-day-closure (motif neutre hachuré)
+    sandbox.__appTestHooks.setCalendarDate('2026-08-01');
+    const dayBtnAug10 = elementsById.get('calendar-grid-display').children.find(b => b.dataset.date === '2026-08-10');
+    assert.ok(dayBtnAug10, 'Le bouton du 10 août 2026 doit exister');
+    assert.ok(dayBtnAug10.className.includes('cal-day-closure-cp'), 'Le 10/08 doit porter la classe cal-day-closure-cp');
+    assert.match(dayBtnAug10.title, /Fermeture entreprise/);
+    assert.match(dayBtnAug10.title, /Congé CP/);
+
+    const dayBtnAug17 = elementsById.get('calendar-grid-display').children.find(b => b.dataset.date === '2026-08-17');
+    assert.ok(dayBtnAug17, 'Le bouton du 17 août 2026 doit exister');
+    assert.ok(dayBtnAug17.className.includes('cal-day-closure'), 'Le 17/08 doit porter la classe cal-day-closure');
+    assert.match(dayBtnAug17.title, /Fermeture entreprise : Fermeture estivale prolongée/);
+
+    // 4. Export JSON inclut bien les préférences et fermetures (Ajustement #3)
+    const exportResult = sandbox.exporterDonneesJSON();
+    assert.ok(exportResult.preferences, 'L’export JSON doit inclure les préférences');
+    assert.equal(exportResult.preferences.joursFermeture.length, 1);
+    assert.equal(exportResult.preferences.joursFermeture[0].debut, '2026-08-10');
+
+    // 5. Suppression de la fermeture
+    const deleted = sandbox.supprimerFermeture(closureId);
+    assert.equal(deleted, true);
+    const prefsApresSuppr = JSON.parse(localStorage.getItem('conges_rtt_prefs_v1'));
+    assert.equal(prefsApresSuppr.joursFermeture.length, 0);
+
+    // 6. Test décalage affiché dans le simulateur et l'aperçu de la modale pour une fermeture (Condition #2)
+    // Ajout d'une fermeture le lundi 2026-11-09
+    sandbox.__appTestHooks.setAlertPrefs({
+        joursFermeture: [{ id: 777, debut: '2026-11-09', fin: '2026-11-09', libelle: 'Journée entreprise fermée' }]
+    });
+
+    // Test simulateur : saisie d'un congé débutant le jour de la fermeture (2026-11-09)
+    elementsById.get('sim-type').value = 'CP';
+    elementsById.get('sim-date-debut').value = '2026-11-09';
+    elementsById.get('sim-duree').value = '1';
+    sandbox.lancerSimulationUI();
+    const simShiftEl = elementsById.get('sim-result-shift');
+    assert.equal(simShiftEl.classList.contains('hidden'), false, 'Le message de décalage doit être affiché dans le simulateur');
+    assert.match(simShiftEl.textContent, /jour de fermeture d’entreprise/);
+    assert.match(simShiftEl.textContent, /début effectif au 2026-11-10/);
+
+    // Test aperçu modale : ouverture d'une absence au 2026-11-09
+    elementsById.get('type-absence').value = 'CP';
+    elementsById.get('date-debut').value = '2026-11-09';
+    elementsById.get('duree-absence').value = '1';
+    sandbox.mettreAJourApercuAbsence();
+    const modalShiftEl = elementsById.get('preview-shift');
+    assert.equal(modalShiftEl.classList.contains('hidden'), false, 'Le message de décalage doit être affiché dans la modale');
+    assert.match(modalShiftEl.textContent, /jour de fermeture d’entreprise/);
+    assert.match(modalShiftEl.textContent, /début reporté au 2026-11-10/);
 });
 
 

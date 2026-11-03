@@ -2022,6 +2022,56 @@ html[data-theme="dark"] .cal-day-rtt {
   border-color: #047857;
 }
 
+/* ─── Motifs hachurés Jours de fermeture entreprise (Point 6 & WCAG AA) ─── */
+
+.cal-day-closure {
+  background-color: #f1f5f9;
+  background-image: repeating-linear-gradient(45deg, rgba(100, 116, 139, 0.25) 0, rgba(100, 116, 139, 0.25) 3px, transparent 3px, transparent 8px);
+  border-color: #cbd5e1;
+  color: #334155;
+  font-weight: 600;
+}
+
+html.dark .cal-day-closure,
+html[data-theme="dark"] .cal-day-closure {
+  background-color: #1e293b;
+  background-image: repeating-linear-gradient(45deg, rgba(148, 163, 184, 0.35) 0, rgba(148, 163, 184, 0.35) 3px, transparent 3px, transparent 8px);
+  border-color: #475569;
+  color: #f1f5f9;
+}
+
+.cal-day-closure-cp {
+  background-color: #e0e7ff;
+  background-image: repeating-linear-gradient(45deg, rgba(79, 70, 229, 0.3) 0, rgba(79, 70, 229, 0.3) 3px, transparent 3px, transparent 8px);
+  border-color: #818cf8;
+  color: #1e1b4b;
+  font-weight: 600;
+}
+
+html.dark .cal-day-closure-cp,
+html[data-theme="dark"] .cal-day-closure-cp {
+  background-color: #1e1b4b;
+  background-image: repeating-linear-gradient(45deg, rgba(165, 180, 252, 0.4) 0, rgba(165, 180, 252, 0.4) 3px, transparent 3px, transparent 8px);
+  border-color: #6366f1;
+  color: #e0e7ff;
+}
+
+.cal-day-closure-rtt {
+  background-color: #d1fae5;
+  background-image: repeating-linear-gradient(45deg, rgba(5, 150, 105, 0.3) 0, rgba(5, 150, 105, 0.3) 3px, transparent 3px, transparent 8px);
+  border-color: #34d399;
+  color: #022c22;
+  font-weight: 600;
+}
+
+html.dark .cal-day-closure-rtt,
+html[data-theme="dark"] .cal-day-closure-rtt {
+  background-color: #022c22;
+  background-image: repeating-linear-gradient(45deg, rgba(110, 231, 183, 0.4) 0, rgba(110, 231, 183, 0.4) 3px, transparent 3px, transparent 8px);
+  border-color: #10b981;
+  color: #d1fae5;
+}
+
 /* Material symbols specific adjustments */
 
 .material-symbols-outlined {

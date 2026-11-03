@@ -188,7 +188,93 @@
     }
 
     /**
-     * Indique si une date est un jour ouvré (ni week-end, ni jour férié).
+     * Fusionne une liste de plages de fermetures (intervalles [debut, fin]) pour éviter les doublons ou chevauchements.
+     * @param {Array<{ debut: string, fin: string, libelle?: string, id?: any }>} [joursFermeture]
+     * @returns {Array<{ debut: string, fin: string, libelle?: string }>}
+     */
+    function fusionnerPlagesFermeture(joursFermeture) {
+        if (!Array.isArray(joursFermeture) || joursFermeture.length === 0) return [];
+        const validRanges = [];
+        for (const item of joursFermeture) {
+            if (!item || typeof item !== 'object') continue;
+            const debut = typeof item.debut === 'string' ? item.debut.trim() : '';
+            const fin = typeof item.fin === 'string' ? item.fin.trim() : (typeof item.dateFin === 'string' ? item.dateFin.trim() : debut);
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(debut) || !/^\d{4}-\d{2}-\d{2}$/.test(fin)) continue;
+            const start = debut <= fin ? debut : fin;
+            const end = debut <= fin ? fin : debut;
+            validRanges.push({ start, end, libelle: item.libelle || '' });
+        }
+        if (validRanges.length === 0) return [];
+        validRanges.sort((a, b) => a.start.localeCompare(b.start));
+
+        const merged = [];
+        let cur = { ...validRanges[0] };
+        for (let i = 1; i < validRanges.length; i++) {
+            const next = validRanges[i];
+            if (next.start <= cur.end) {
+                if (next.end > cur.end) {
+                    cur.end = next.end;
+                }
+                if (next.libelle && !cur.libelle.includes(next.libelle)) {
+                    cur.libelle = cur.libelle ? `${cur.libelle} / ${next.libelle}` : next.libelle;
+                }
+            } else {
+                merged.push({ debut: cur.start, fin: cur.end, libelle: cur.libelle });
+                cur = { ...next };
+            }
+        }
+        merged.push({ debut: cur.start, fin: cur.end, libelle: cur.libelle });
+        return merged;
+    }
+
+    /**
+     * Construit une Map de toutes les dates de fermeture (YYYY-MM-DD -> libelle) à partir des plages.
+     * @param {Array} [joursFermeture]
+     * @returns {Map<string, string>}
+     */
+    function buildClosureDatesMap(joursFermeture) {
+        const map = new Map();
+        const merged = fusionnerPlagesFermeture(joursFermeture);
+        for (const range of merged) {
+            const cur = parseLocalDate(range.debut);
+            const end = parseLocalDate(range.fin);
+            if (!cur || !end) continue;
+            const endMs = end.getTime();
+            let guard = 0;
+            while (cur.getTime() <= endMs && guard < 1000) {
+                const dateStr = formatLocalDate(cur);
+                if (!map.has(dateStr)) {
+                    map.set(dateStr, range.libelle || 'Fermeture entreprise');
+                }
+                cur.setDate(cur.getDate() + 1);
+                guard++;
+            }
+        }
+        return map;
+    }
+
+    /**
+     * Indique si une date est un jour de fermeture de l'entreprise.
+     * @param {Date|string} dateOrStr
+     * @param {Object} [options]
+     * @returns {boolean}
+     */
+    function isClosureDay(dateOrStr, options) {
+        if (!options || !Array.isArray(options.joursFermeture) || options.joursFermeture.length === 0) {
+            return false;
+        }
+        const d = dateOrStr instanceof Date ? dateOrStr : parseLocalDate(dateOrStr);
+        if (!d) return false;
+        const dateStr = formatLocalDate(d);
+        if (options._closureMap instanceof Map) {
+            return options._closureMap.has(dateStr);
+        }
+        const closureMap = buildClosureDatesMap(options.joursFermeture);
+        return closureMap.has(dateStr);
+    }
+
+    /**
+     * Indique si une date est un jour ouvré (ni week-end, ni jour férié, ni fermeture d'entreprise).
      * @param {Date|string} dateOrStr
      * @param {Object} [options]
      * @returns {boolean}
@@ -196,7 +282,7 @@
     function isWorkingDay(dateOrStr, options) {
         const d = dateOrStr instanceof Date ? dateOrStr : parseLocalDate(dateOrStr);
         if (!d) return false;
-        return !isWeekend(d) && !isHoliday(d, options);
+        return !isWeekend(d) && !isHoliday(d, options) && !isClosureDay(d, options);
     }
 
     /**
@@ -216,6 +302,7 @@
      *   shiftReason: string|null,
      *   skippedHolidays: string[],
      *   skippedWeekendDays: number,
+     *   skippedClosureDays: string[],
      *   days: Array<{ date: string, weight: number, cpPeriod: string, rttPeriod: string, absence: Object }>
      * }}
      */
@@ -232,6 +319,7 @@
                 shiftReason: null,
                 skippedHolidays: [],
                 skippedWeekendDays: 0,
+                skippedClosureDays: [],
                 days: []
             };
         }
@@ -239,9 +327,15 @@
         const cDate = new Date(startDate);
         let shiftReason = null;
 
-        // 1. Si la date de début tombe un week-end ou un férié, décaler au 1er jour ouvré suivant
+        // 1. Si la date de début tombe un week-end, un férié ou une fermeture, décaler au 1er jour ouvré suivant
         if (!isWorkingDay(cDate, options)) {
-            shiftReason = isHoliday(cDate, options) ? 'ferie' : 'weekend';
+            if (isHoliday(cDate, options)) {
+                shiftReason = 'ferie';
+            } else if (isClosureDay(cDate, options)) {
+                shiftReason = 'fermeture';
+            } else {
+                shiftReason = 'weekend';
+            }
             let guard = 0;
             while (!isWorkingDay(cDate, options) && guard < 366) {
                 cDate.setDate(cDate.getDate() + 1);
@@ -256,8 +350,10 @@
         let dureeRestante = Math.round(totalDuree * 2) / 2;
         const days = [];
         const skippedHolidays = [];
+        const skippedClosureDays = [];
         let skippedWeekendDays = 0;
         let pendingHolidayDates = [];
+        let pendingClosureDates = [];
         let pendingWeekends = 0;
         let iterations = 0;
 
@@ -266,14 +362,17 @@
             const currentStr = formatLocalDate(cDate);
             const wknd = isWeekend(cDate);
             const ferie = isHoliday(cDate, options);
+            const fermeture = isClosureDay(cDate, options);
 
-            if (!wknd && !ferie) {
-                // On ne comptabilise les week-ends/fériés sautés que s'ils sont compris ENTRE deux jours ouvrés posés
+            if (!wknd && !ferie && !fermeture) {
+                // On ne comptabilise les week-ends/fériés/fermetures sautés que s'ils sont compris ENTRE deux jours ouvrés posés
                 if (days.length > 0) {
                     skippedHolidays.push(...pendingHolidayDates);
                     skippedWeekendDays += pendingWeekends;
+                    skippedClosureDays.push(...pendingClosureDates);
                 }
                 pendingHolidayDates = [];
+                pendingClosureDates = [];
                 pendingWeekends = 0;
 
                 const weight = dureeRestante >= 1 ? 1 : 0.5;
@@ -286,7 +385,9 @@
                 });
                 dureeRestante = Math.round((dureeRestante - weight) * 100) / 100;
             } else {
-                if (ferie && !wknd) {
+                if (fermeture && !wknd) {
+                    pendingClosureDates.push(currentStr);
+                } else if (ferie && !wknd) {
                     pendingHolidayDates.push(currentStr);
                 } else if (wknd) {
                     pendingWeekends++;
@@ -306,6 +407,7 @@
             shiftReason,
             skippedHolidays,
             skippedWeekendDays,
+            skippedClosureDays,
             days
         };
     }
@@ -372,11 +474,12 @@
 
     /**
      * Construit la carte des jours couverts par l'ensemble des absences pour l'affichage calendrier
-     * et la détection de chevauchements (gère le cumul de deux demi-journées sur une même date).
+     * et la détection de chevauchements (gère le cumul de deux demi-journées sur une même date,
+     * et trace les jours de fermeture traversés par une absence pour affichage hachuré coloré).
      *
      * @param {Array} absences
      * @param {Object} [options]
-     * @returns {Map<string, { totalWeight: number, entries: Array<{ weight: number, absence: Object }> }>}
+     * @returns {Map<string, { totalWeight: number, entries: Array<{ weight: number, absence: Object }>, isSkippedClosure?: boolean, closureAbsenceType?: string }>}
      */
     function buildCalendarCoveredDays(absences, options) {
         const map = new Map();
@@ -389,6 +492,18 @@
                 existing.totalWeight = Math.round((existing.totalWeight + d.weight) * 100) / 100;
                 existing.entries.push({ weight: d.weight, absence: a });
                 map.set(d.date, existing);
+            }
+            // Traiter les jours de fermeture traversés par cette absence
+            if (Array.isArray(expanded.skippedClosureDays)) {
+                for (const closureDate of expanded.skippedClosureDays) {
+                    const existing = map.get(closureDate) || { totalWeight: 0, entries: [] };
+                    existing.isSkippedClosure = true;
+                    existing.closureAbsenceType = a.type;
+                    if (!existing.entries.some(e => e.absence === a)) {
+                        existing.entries.push({ weight: 0, absence: a });
+                    }
+                    map.set(closureDate, existing);
+                }
             }
         }
         return map;
@@ -587,6 +702,10 @@
             return feriesByYear.get(year);
         }
 
+        const closureMap = options._closureMap instanceof Map
+            ? options._closureMap
+            : buildClosureDatesMap(options.joursFermeture);
+
         let count = 0;
         const cursor = new Date(start.getFullYear(), start.getMonth(), start.getDate(), 0, 0, 0, 0);
         const endMs = end.getTime();
@@ -595,7 +714,7 @@
             if (!isWeekend(cursor)) {
                 const y = cursor.getFullYear();
                 const dateStr = formatLocalDate(cursor);
-                if (!getHolidaysSet(y).has(dateStr)) {
+                if (!getHolidaysSet(y).has(dateStr) && !closureMap.has(dateStr)) {
                     count++;
                 }
             }
@@ -1004,8 +1123,8 @@
             if (seenBridgeDates.has(bridgeDateStr)) continue;
             if (minDateStr && bridgeDateStr < minDateStr) continue;
 
-            // Si le jour du pont est lui-même un jour férié chômé ou un week-end, ce n'est pas un jour à poser
-            if (isWeekend(bridgeDateObj) || feriesSet.has(bridgeDateStr)) {
+            // Si le jour du pont est lui-même un jour férié chômé, un week-end ou une fermeture, ce n'est pas un jour à poser
+            if (isWeekend(bridgeDateObj) || feriesSet.has(bridgeDateStr) || isClosureDay(bridgeDateObj, options)) {
                 continue;
             }
 
@@ -1257,6 +1376,9 @@
         getJoursFeries,
         isWeekend,
         isHoliday,
+        isClosureDay,
+        fusionnerPlagesFermeture,
+        buildClosureDatesMap,
         isWorkingDay,
         expandAbsenceDays,
         calculerSoldes,

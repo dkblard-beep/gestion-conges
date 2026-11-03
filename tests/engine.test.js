@@ -756,6 +756,116 @@ test('Lot E (Clarification #3) : définition exacte du taux d’utilisation = Ma
     assert.equal(emptyRightsStats.tauxUtilisationGlobal, 0);
 });
 
+test('Fermetures d’entreprise : exclusion des jours ouvrés, fusion de chevauchements et non-déduction du solde', () => {
+    // 1. Fusion de plages qui se chevauchent (Ajustement #2)
+    const overlappingRanges = [
+        { id: 1, debut: '2026-12-24', fin: '2026-12-28', libelle: 'Pont de Noël' },
+        { id: 2, debut: '2026-12-27', fin: '2027-01-02', libelle: 'Nouvel An' }
+    ];
+    const merged = AppEngine.fusionnerPlagesFermeture(overlappingRanges);
+    assert.equal(merged.length, 1, 'Deux plages qui se chevauchent doivent fusionner en une seule');
+    assert.equal(merged[0].debut, '2026-12-24');
+    assert.equal(merged[0].fin, '2027-01-02');
+    assert.match(merged[0].libelle, /Pont de Noël/);
+    assert.match(merged[0].libelle, /Nouvel An/);
+
+    const closureOpts = {
+        joursFermeture: overlappingRanges
+    };
+
+    // 2. Une fermeture d'une semaine (ex. 24/12 au 02/01) est exclue du décompte des jours ouvrés
+    // Entre le 24/12/2026 et le 02/01/2027 inclus : normalement jours ouvrés (24, 28, 29, 30, 31 déc), tous fermés
+    const joursOuvresPendantFermeture = AppEngine.compterJoursOuvresEntre('2026-12-24', '2027-01-02', closureOpts);
+    assert.equal(joursOuvresPendantFermeture, 0, 'Les jours de fermeture doivent compter pour 0 jour ouvré');
+
+    // 3. Un CP de 3 jours posé juste avant une fermeture ne déborde pas sur les jours de fermeture
+    // Début le mardi 22/12/2026 pour 3 jours ouvrés :
+    // 22/12 (j1), 23/12 (j2) -> le 24/12 au 02/01 est fermé -> le 03/01 est dimanche -> j3 posé le lundi 04/01/2027 !
+    const cpPreFermeture = AppEngine.expandAbsenceDays(
+        { id: 10, type: 'CP', date: '2026-12-22', duree: 3 },
+        closureOpts
+    );
+    assert.equal(cpPreFermeture.days.length, 3);
+    assert.equal(cpPreFermeture.days[0].date, '2026-12-22');
+    assert.equal(cpPreFermeture.days[1].date, '2026-12-23');
+    assert.equal(cpPreFermeture.days[2].date, '2027-01-04', 'Le 3e jour doit reprendre le lundi après réouverture');
+    assert.equal(cpPreFermeture.endDate, '2027-01-04');
+    assert.ok(cpPreFermeture.skippedClosureDays.includes('2026-12-24'));
+    assert.ok(cpPreFermeture.skippedClosureDays.includes('2026-12-31'));
+
+    // 4. Un congé qui démarre un jour de fermeture est décalé au premier jour ouvré après réouverture
+    const cpPendantFermeture = AppEngine.expandAbsenceDays(
+        { id: 11, type: 'CP', date: '2026-12-28', duree: 1 },
+        closureOpts
+    );
+    assert.equal(cpPendantFermeture.shifted, true);
+    assert.equal(cpPendantFermeture.shiftReason, 'fermeture');
+    assert.equal(cpPendantFermeture.effectiveStartDate, '2027-01-04');
+
+    // 5. Un congé qui chevauche une fermeture ne déduit que les jours ouvrés réellement travaillés
+    // Données avec 25 CP et absence posée du 22/12 pour 3 jours ouvrés (couvrant 22/12, 23/12 et 04/01)
+    const testData = {
+        absences: [
+            { id: 10, type: 'CP', date: '2026-12-22', duree: 3 }
+        ],
+        configCP: { '2026': 25 },
+        configRTT: { '2026': 10 }
+    };
+    const soldes = AppEngine.calculerSoldes(testData, '2026', '2026', closureOpts);
+    assert.equal(soldes.prisCP, 3, 'Seuls les 3 vrais jours ouvrés travaillés sont décomptés');
+    assert.equal(soldes.resteCP, 22, 'Le solde restant doit être 25 - 3 = 22');
+
+    // 6. Une fermeture ne génère pas de suggestion de pont
+    // Supposons une fermeture le vendredi 15 mai 2026 (vendredi après Ascension)
+    const pontsSansFermeture = AppEngine.suggererPonts(testData, 2026, {});
+    const pontAscensionSans = pontsSansFermeture.find(p => p.datePont === '2026-05-15');
+    assert.ok(pontAscensionSans, 'Sans fermeture, le vendredi 15/05/2026 est normalement suggéré comme pont');
+
+    const pontsAvecFermeture = AppEngine.suggererPonts(testData, 2026, {
+        joursFermeture: [{ id: 99, debut: '2026-05-15', fin: '2026-05-15', libelle: 'Pont offert par l’entreprise' }]
+    });
+    const pontAscensionAvec = pontsAvecFermeture.find(p => p.datePont === '2026-05-15');
+    assert.equal(pontAscensionAvec, undefined, 'Si l’entreprise est fermée le 15/05, aucun pont à poser ne doit être suggéré');
+
+    // 7. Les statistiques annuelles n’incluent pas les jours de fermeture
+    const statsFermeture = AppEngine.calculerStatistiquesAnnuelles(testData, 2026, closureOpts);
+    const decStats = statsFermeture.repartitionMensuelle.find(m => m.mois === 12);
+    assert.equal(decStats.total, 2, 'En décembre, seuls les 22 et 23 décembre (2 j) sont posés car le 24 au 31 est fermé');
+    assert.equal(statsFermeture.totalAnnee, 2, 'Total sur l’année 2026 = 2 j');
+});
+
+test('Fermetures d’entreprise : fermeture traversant le changement d’année et répartition entre stats 2026 et 2027', () => {
+    // Test explicite demandé (Condition #1) : fermeture du 24/12/2026 au 02/01/2027 traversant le changement d'année
+    // et répartition des jours ouvrés entre stats 2026 et 2027 sans compter les jours fermés.
+    // Soit un congé de 5 jours posé du 22/12/2026 au 06/01/2027 :
+    // - 22/12/2026 (mardi, j1 ouvré)
+    // - 23/12/2026 (mercredi, j2 ouvré)
+    // - [24/12 au 02/01 inclus fermé : 0 j ouvré]
+    // - [03/01/2027 dimanche : 0 j]
+    // - 04/01/2027 (lundi, j3 ouvré)
+    // - 05/01/2027 (mardi, j4 ouvré)
+    // - 06/01/2027 (mercredi, j5 ouvré)
+    const crossYearData = {
+        absences: [
+            { id: 99, type: 'CP', date: '2026-12-22', duree: 5 }
+        ],
+        configCP: { '2026': 25, '2027': 25 },
+        configRTT: { '2026': 10, '2027': 10 }
+    };
+    const crossOpts = {
+        joursFermeture: [{ id: 88, debut: '2026-12-24', fin: '2027-01-02', libelle: 'Fermeture fin d’année' }]
+    };
+    // Stats 2026 : doit contenir exactement 2 jours (22 et 23 décembre), aucun jour entre le 24 et le 31 décembre
+    const stats2026 = AppEngine.calculerStatistiquesAnnuelles(crossYearData, 2026, crossOpts);
+    assert.equal(stats2026.totalAnnee, 2, 'En 2026, seuls 2 jours ouvrés doivent être comptabilisés');
+    assert.equal(stats2026.repartitionMensuelle.find(m => m.mois === 12).total, 2);
+
+    // Stats 2027 : doit contenir exactement 3 jours (4, 5 et 6 janvier), 0 jour pour le 1er ou 2 janvier
+    const stats2027 = AppEngine.calculerStatistiquesAnnuelles(crossYearData, 2027, crossOpts);
+    assert.equal(stats2027.totalAnnee, 3, 'En 2027, les 3 jours restants sont comptabilisés en janvier après réouverture');
+    assert.equal(stats2027.repartitionMensuelle.find(m => m.mois === 1).total, 3);
+});
+
 
 
 
