@@ -701,6 +701,59 @@ test('Lot E (#2 & #3) : genererExportICS respecte RFC 5545 (DTSTART premier jour
         ics,
         /UID:absence-102-CP@suivi-conges-rtt\.local\r\nDTSTAMP:20261101T120000Z\r\nDTSTART;VALUE=DATE:20260803\r\nDTEND;VALUE=DATE:20260815\r\nSUMMARY:CP \(10 j\)/
     );
+
+    // 3. Test explicite demandé (Condition #2) : congé du vendredi au lundi (2 jours ouvrés : vendredi 12/06/2026 + lundi 15/06/2026)
+    // -> produit UN SEUL VEVENT, DTSTART = vendredi (20260612), DTEND = mardi exclusif (20260616)
+    const fridayToMondayData = {
+        absences: [
+            { id: 201, type: 'CP', date: '2026-06-12', duree: 2 }
+        ],
+        configCP: { '2026': 25 },
+        configRTT: { '2026': 10 }
+    };
+    const icsFriMon = AppEngine.genererExportICS(fridayToMondayData, { dtstamp: '20261103T120000Z' });
+    const friMonEvents = icsFriMon.match(/BEGIN:VEVENT/g) || [];
+    assert.equal(friMonEvents.length, 1, 'Un congé du vendredi au lundi (2 jours ouvrés) doit produire un seul VEVENT');
+    assert.match(
+        icsFriMon,
+        /DTSTART;VALUE=DATE:20260612\r\nDTEND;VALUE=DATE:20260616\r\nSUMMARY:CP \(2 j\)/,
+        'DTSTART doit être le vendredi (20260612) et DTEND le mardi suivant exclusif (20260616)'
+    );
+});
+
+test('Lot E (Clarification #3) : définition exacte du taux d’utilisation = Math.round((joursPoses / totalDroits) * 100) et gestion de totalDroits = 0', () => {
+    // 1. Cas nominal : 15 CP posés sur 30 (50%), 3 RTT posés sur 10 (30%) -> Global = 18 posés sur 40 droits = 45%
+    const data = {
+        absences: [
+            { id: 1, type: 'CP', date: '2026-06-01', duree: 15 },
+            { id: 2, type: 'RTT', date: '2026-07-01', duree: 3 }
+        ],
+        configCP: { '2026': 30 },
+        configRTT: { '2026': 10 }
+    };
+    const stats = AppEngine.calculerStatistiquesAnnuelles(data, 2026);
+    assert.equal(stats.prisCP, 15);
+    assert.equal(stats.initCP, 30);
+    assert.equal(stats.tauxUtilisationCP, Math.round((15 / 30) * 100)); // 50%
+
+    assert.equal(stats.prisRTT, 3);
+    assert.equal(stats.initRTT, 10);
+    assert.equal(stats.tauxUtilisationRTT, Math.round((3 / 10) * 100)); // 30%
+
+    assert.equal(stats.totalPrisPeriode, 18, 'Jours posés sur la période = prisCP + prisRTT');
+    assert.equal(stats.totalInitial, 40, 'Total des droits = initCP + initRTT');
+    assert.equal(
+        stats.tauxUtilisationGlobal,
+        Math.round((stats.totalPrisPeriode / stats.totalInitial) * 100),
+        'Taux d’utilisation global = Math.round((joursPoses / totalDroits) * 100) = 45%'
+    );
+    assert.equal(stats.tauxUtilisationGlobal, 45);
+
+    // 2. Cas limite : total des droits = 0 -> taux d'utilisation = 0% (aucune division par zéro / NaN)
+    const emptyRightsStats = AppEngine.calculerStatistiquesAnnuelles({ absences: [], configCP: {}, configRTT: {} }, 2026);
+    assert.equal(emptyRightsStats.tauxUtilisationCP, 0);
+    assert.equal(emptyRightsStats.tauxUtilisationRTT, 0);
+    assert.equal(emptyRightsStats.tauxUtilisationGlobal, 0);
 });
 
 

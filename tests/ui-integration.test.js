@@ -409,7 +409,7 @@ test('Service Worker (sw.js) : inclut config.js et engine.js et ne supprime que 
                 addAll: async (urls) => { addedUrls.push(...urls); },
                 put: async () => {}
             }),
-            keys: async () => ['conges-pwa-cache-v12', 'conges-pwa-cache-v21', 'autre-app-cache-v1'],
+            keys: async () => ['conges-pwa-cache-v12', 'conges-pwa-cache-v18', 'conges-pwa-cache-v19', 'conges-pwa-cache-v20', 'conges-pwa-cache-v21', 'autre-app-cache-v1'],
             delete: async (name) => { deletedCaches.push(name); return true; },
             match: async () => null
         },
@@ -436,7 +436,11 @@ test('Service Worker (sw.js) : inclut config.js et engine.js et ne supprime que 
     listeners.activate({ waitUntil: (p) => { activatePromise = p; } });
     await activatePromise;
 
-    assert.deepEqual(deletedCaches, ['conges-pwa-cache-v12'], 'Seul l’ancien cache de cette application doit être supprimé');
+    assert.deepEqual(
+        deletedCaches,
+        ['conges-pwa-cache-v12', 'conges-pwa-cache-v18', 'conges-pwa-cache-v19', 'conges-pwa-cache-v20'],
+        'Tous les anciens caches conges-pwa-cache-* (v12, v18, v19, v20) doivent être purgés en conservant v21 et les caches tiers'
+    );
 });
 
 test('Verrouillage de la suppression : boutons grisés et suppression bloquée par défaut, déblocage manuel persistant jusqu’au reclic', async () => {
@@ -917,6 +921,7 @@ test('Lot E (UI) : affichage des statistiques annuelles sur le snapshot, export 
 
     // 1. Statistiques annuelles affichées sur le tableau de bord depuis REAL_USER_DATA
     assert.equal(elementsById.get('stats-taux-global').textContent, '51%');
+    assert.match(elementsById.get('stats-taux-detail').textContent, /21 \/ 41 j posés/);
     assert.match(elementsById.get('stats-taux-detail').textContent, /CP : 52%/);
     assert.match(elementsById.get('stats-taux-detail').textContent, /RTT : 50%/);
     assert.equal(elementsById.get('stats-mois-plus-charge').textContent, 'Août (10 j)');

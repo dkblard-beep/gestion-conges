@@ -1093,7 +1093,7 @@
         }
         if (DOM.statsTauxDetail) {
             DOM.statsTauxDetail.textContent =
-                `CP : ${stats.tauxUtilisationCP}% (${formatDaysNumber(stats.prisCP)}/${formatDaysNumber(stats.initCP)} j) • RTT : ${stats.tauxUtilisationRTT}% (${formatDaysNumber(stats.prisRTT)}/${formatDaysNumber(stats.initRTT)} j)`;
+                `${formatDaysNumber(stats.totalPrisPeriode)} / ${formatDaysNumber(stats.totalInitial)} j posés • CP : ${stats.tauxUtilisationCP}% (${formatDaysNumber(stats.prisCP)}/${formatDaysNumber(stats.initCP)} j) • RTT : ${stats.tauxUtilisationRTT}% (${formatDaysNumber(stats.prisRTT)}/${formatDaysNumber(stats.initRTT)} j)`;
         }
 
         if (DOM.statsMoisPlusCharge) {
