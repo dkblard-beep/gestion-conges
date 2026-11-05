@@ -319,7 +319,8 @@
     }
 
     /**
-     * Indique si une date est un jour ouvré (ni week-end, ni jour férié, ni fermeture d'entreprise).
+     * Indique si une date est un jour ouvré (ni week-end ni jour férié chômé).
+     * Les fermetures d'entreprise ne retirent pas la qualité de jour ouvré décomptable (CP/RTT peuvent y être posés).
      * @param {Date|string} dateOrStr
      * @param {Object} [options]
      * @returns {boolean}
@@ -327,7 +328,7 @@
     function isWorkingDay(dateOrStr, options) {
         const d = dateOrStr instanceof Date ? dateOrStr : parseLocalDate(dateOrStr);
         if (!d) return false;
-        return !isWeekend(d) && !isHoliday(d, options) && !isClosureDay(d, options);
+        return !isWeekend(d) && !isHoliday(d, options);
     }
 
     /**
@@ -372,12 +373,10 @@
         const cDate = new Date(startDate);
         let shiftReason = null;
 
-        // 1. Si la date de début tombe un week-end, un férié ou une fermeture, décaler au 1er jour ouvré suivant
+        // 1. Si la date de début tombe un week-end ou un férié, décaler au 1er jour ouvré suivant
         if (!isWorkingDay(cDate, options)) {
             if (isHoliday(cDate, options)) {
                 shiftReason = 'ferie';
-            } else if (isClosureDay(cDate, options)) {
-                shiftReason = 'fermeture';
             } else {
                 shiftReason = 'weekend';
             }
@@ -398,7 +397,6 @@
         const skippedClosureDays = [];
         let skippedWeekendDays = 0;
         let pendingHolidayDates = [];
-        let pendingClosureDates = [];
         let pendingWeekends = 0;
         let iterations = 0;
 
@@ -407,17 +405,14 @@
             const currentStr = formatLocalDate(cDate);
             const wknd = isWeekend(cDate);
             const ferie = isHoliday(cDate, options);
-            const fermeture = isClosureDay(cDate, options);
 
-            if (!wknd && !ferie && !fermeture) {
-                // On ne comptabilise les week-ends/fériés/fermetures sautés que s'ils sont compris ENTRE deux jours ouvrés posés
+            if (!wknd && !ferie) {
+                // On ne comptabilise les week-ends/fériés sautés que s'ils sont compris ENTRE deux jours ouvrés posés
                 if (days.length > 0) {
                     skippedHolidays.push(...pendingHolidayDates);
                     skippedWeekendDays += pendingWeekends;
-                    skippedClosureDays.push(...pendingClosureDates);
                 }
                 pendingHolidayDates = [];
-                pendingClosureDates = [];
                 pendingWeekends = 0;
 
                 const weight = dureeRestante >= 1 ? 1 : 0.5;
@@ -430,9 +425,7 @@
                 });
                 dureeRestante = Math.round((dureeRestante - weight) * 100) / 100;
             } else {
-                if (fermeture && !wknd) {
-                    pendingClosureDates.push(currentStr);
-                } else if (ferie && !wknd) {
+                if (ferie && !wknd) {
                     pendingHolidayDates.push(currentStr);
                 } else if (wknd) {
                     pendingWeekends++;
@@ -519,12 +512,11 @@
 
     /**
      * Construit la carte des jours couverts par l'ensemble des absences pour l'affichage calendrier
-     * et la détection de chevauchements (gère le cumul de deux demi-journées sur une même date,
-     * et trace les jours de fermeture traversés par une absence pour affichage hachuré coloré).
+     * et la détection de chevauchements (gère le cumul de deux demi-journées sur une même date).
      *
      * @param {Array} absences
      * @param {Object} [options]
-     * @returns {Map<string, { totalWeight: number, entries: Array<{ weight: number, absence: Object }>, isSkippedClosure?: boolean, closureAbsenceType?: string }>}
+     * @returns {Map<string, { totalWeight: number, entries: Array<{ weight: number, absence: Object }> }>}
      */
     function buildCalendarCoveredDays(absences, options) {
         const map = new Map();
@@ -537,18 +529,6 @@
                 existing.totalWeight = Math.round((existing.totalWeight + d.weight) * 100) / 100;
                 existing.entries.push({ weight: d.weight, absence: a });
                 map.set(d.date, existing);
-            }
-            // Traiter les jours de fermeture traversés par cette absence
-            if (Array.isArray(expanded.skippedClosureDays)) {
-                for (const closureDate of expanded.skippedClosureDays) {
-                    const existing = map.get(closureDate) || { totalWeight: 0, entries: [] };
-                    existing.isSkippedClosure = true;
-                    existing.closureAbsenceType = a.type;
-                    if (!existing.entries.some(e => e.absence === a)) {
-                        existing.entries.push({ weight: 0, absence: a });
-                    }
-                    map.set(closureDate, existing);
-                }
             }
         }
         return map;
@@ -747,10 +727,6 @@
             return feriesByYear.get(year);
         }
 
-        const closureMap = options._closureMap instanceof Map
-            ? options._closureMap
-            : buildClosureDatesMap(options.joursFermeture);
-
         let count = 0;
         const cursor = new Date(start.getFullYear(), start.getMonth(), start.getDate(), 0, 0, 0, 0);
         const endMs = end.getTime();
@@ -759,7 +735,7 @@
             if (!isWeekend(cursor)) {
                 const y = cursor.getFullYear();
                 const dateStr = formatLocalDate(cursor);
-                if (!getHolidaysSet(y).has(dateStr) && !closureMap.has(dateStr)) {
+                if (!getHolidaysSet(y).has(dateStr)) {
                     count++;
                 }
             }
@@ -1168,10 +1144,16 @@
             if (seenBridgeDates.has(bridgeDateStr)) continue;
             if (minDateStr && bridgeDateStr < minDateStr) continue;
 
-            // Si le jour du pont est lui-même un jour férié chômé, un week-end ou une fermeture, ce n'est pas un jour à poser
-            if (isWeekend(bridgeDateObj) || feriesSet.has(bridgeDateStr) || isClosureDay(bridgeDateObj, options)) {
+            // Si le jour du pont est lui-même un jour férié chômé ou un week-end, ce n'est pas un jour à poser
+            if (isWeekend(bridgeDateObj) || feriesSet.has(bridgeDateStr)) {
                 continue;
             }
+
+            const isClosure = isClosureDay(bridgeDateObj, options);
+            const closureDatesMap = options._closureMap instanceof Map
+                ? options._closureMap
+                : buildClosureDatesMap(options.joursFermeture);
+            const closureLabel = isClosure ? (closureDatesMap.get(bridgeDateStr) || 'Fermeture entreprise') : '';
 
             const coveredInfo = coveredMap.get(bridgeDateStr);
             const alreadyBookedWeight = coveredInfo ? coveredInfo.totalWeight : 0;
@@ -1188,7 +1170,9 @@
                 nomFerie: getNomJourFerie(ferieStr, targetYear),
                 positionLabel,
                 duree: dureePont,
-                reposTotalJours: 3 + dureePont
+                reposTotalJours: 3 + dureePont,
+                isClosure,
+                closureLabel: isClosure ? closureLabel : null
             });
         }
 
@@ -1237,6 +1221,7 @@
             }
 
             const primaryOption = eligibleOptions[0];
+            const closureSuffix = cand.isClosure && cand.closureLabel ? ` (fermeture entreprise : ${cand.closureLabel})` : '';
             suggestions.push({
                 ...cand,
                 type: primaryOption.type,
@@ -1244,7 +1229,7 @@
                 soldeAvant: primaryOption.soldeAvant,
                 soldeRestantApres: primaryOption.soldeRestantApres,
                 eligibleOptions,
-                summary: `Poser ${cand.duree} jour${cand.duree > 1 ? 's' : ''} de ${primaryOption.type} le ${cand.datePont} (${cand.nomFerie} le ${cand.dateFerie}) → solde ${primaryOption.type} avant : ${primaryOption.soldeAvant} j, solde restant après : ${primaryOption.soldeRestantApres} j`
+                summary: `Poser ${cand.duree} jour${cand.duree > 1 ? 's' : ''} de ${primaryOption.type} le ${cand.datePont} (${cand.nomFerie} le ${cand.dateFerie}${closureSuffix}) → solde ${primaryOption.type} avant : ${primaryOption.soldeAvant} j, solde restant après : ${primaryOption.soldeRestantApres} j`
             });
         }
 

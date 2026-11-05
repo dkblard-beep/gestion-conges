@@ -408,7 +408,7 @@ test('Service Worker (sw.js) : inclut config.js et engine.js et ne supprime que 
                 addAll: async (urls) => { addedUrls.push(...urls); },
                 put: async () => {}
             }),
-            keys: async () => ['conges-pwa-cache-v12', 'conges-pwa-cache-v18', 'conges-pwa-cache-v19', 'conges-pwa-cache-v20', 'conges-pwa-cache-v21', 'conges-pwa-cache-v22', 'conges-pwa-cache-v23', 'conges-pwa-cache-v24', 'autre-app-cache-v1'],
+            keys: async () => ['conges-pwa-cache-v12', 'conges-pwa-cache-v18', 'conges-pwa-cache-v19', 'conges-pwa-cache-v20', 'conges-pwa-cache-v21', 'conges-pwa-cache-v22', 'conges-pwa-cache-v23', 'conges-pwa-cache-v24', 'conges-pwa-cache-v25', 'autre-app-cache-v1'],
             delete: async (name) => { deletedCaches.push(name); return true; },
             match: async () => null
         },
@@ -430,15 +430,15 @@ test('Service Worker (sw.js) : inclut config.js et engine.js et ne supprime que 
     assert.ok(addedUrls.includes('./engine.js'), 'sw.js doit mettre en cache ./engine.js');
     assert.ok(addedUrls.includes('./app.js'), 'sw.js doit mettre en cache ./app.js');
 
-    // 2. Test activate : supprime tous les anciens caches conges-pwa-cache-* mais conserve conges-pwa-cache-v24 et autre-app-cache-v1
+    // 2. Test activate : supprime tous les anciens caches conges-pwa-cache-* mais conserve conges-pwa-cache-v25 et autre-app-cache-v1
     let activatePromise;
     listeners.activate({ waitUntil: (p) => { activatePromise = p; } });
     await activatePromise;
 
     assert.deepEqual(
         deletedCaches,
-        ['conges-pwa-cache-v12', 'conges-pwa-cache-v18', 'conges-pwa-cache-v19', 'conges-pwa-cache-v20', 'conges-pwa-cache-v21', 'conges-pwa-cache-v22', 'conges-pwa-cache-v23'],
-        'Tous les anciens caches conges-pwa-cache-* (v12 à v23) doivent être purgés en conservant v24 et les caches tiers'
+        ['conges-pwa-cache-v12', 'conges-pwa-cache-v18', 'conges-pwa-cache-v19', 'conges-pwa-cache-v20', 'conges-pwa-cache-v21', 'conges-pwa-cache-v22', 'conges-pwa-cache-v23', 'conges-pwa-cache-v24'],
+        'Tous les anciens caches conges-pwa-cache-* (v12 à v24) doivent être purgés en conservant v25 et les caches tiers'
     );
 });
 
@@ -1113,31 +1113,207 @@ test('Fermetures d’entreprise (UI) : ajout, modification (maintien de l’id),
     const prefsApresSuppr = JSON.parse(localStorage.getItem('conges_rtt_prefs_v1'));
     assert.equal(prefsApresSuppr.joursFermeture.length, 0);
 
-    // 6. Test décalage affiché dans le simulateur et l'aperçu de la modale pour une fermeture (Condition #2)
+    // 6. Règle corrigée : une fermeture n'empêche pas de poser un congé et ne le décale pas
     // Ajout d'une fermeture le lundi 2026-11-09
     sandbox.__appTestHooks.setAlertPrefs({
         joursFermeture: [{ id: 777, debut: '2026-11-09', fin: '2026-11-09', libelle: 'Journée entreprise fermée' }]
     });
 
-    // Test simulateur : saisie d'un congé débutant le jour de la fermeture (2026-11-09)
+    // Test simulateur : saisie d'un congé débutant le jour de la fermeture (2026-11-09) -> aucun décalage
     elementsById.get('sim-type').value = 'CP';
     elementsById.get('sim-date-debut').value = '2026-11-09';
     elementsById.get('sim-duree').value = '1';
     sandbox.lancerSimulationUI();
     const simShiftEl = elementsById.get('sim-result-shift');
-    assert.equal(simShiftEl.classList.contains('hidden'), false, 'Le message de décalage doit être affiché dans le simulateur');
-    assert.match(simShiftEl.textContent, /jour de fermeture d’entreprise/);
-    assert.match(simShiftEl.textContent, /début effectif au 2026-11-10/);
+    assert.equal(simShiftEl.classList.contains('hidden'), true, 'Le message de décalage ne doit PAS être affiché car la fermeture est couvrable');
 
-    // Test aperçu modale : ouverture d'une absence au 2026-11-09
+    // Test aperçu modale : ouverture d'une absence au 2026-11-09 -> aucun décalage
     elementsById.get('type-absence').value = 'CP';
     elementsById.get('date-debut').value = '2026-11-09';
     elementsById.get('duree-absence').value = '1';
     sandbox.mettreAJourApercuAbsence();
     const modalShiftEl = elementsById.get('preview-shift');
-    assert.equal(modalShiftEl.classList.contains('hidden'), false, 'Le message de décalage doit être affiché dans la modale');
-    assert.match(modalShiftEl.textContent, /jour de fermeture d’entreprise/);
-    assert.match(modalShiftEl.textContent, /début reporté au 2026-11-10/);
+    assert.equal(modalShiftEl.classList.contains('hidden'), true, 'L’alerte de décalage doit rester masquée dans la modale');
+
+    // 7. Scénario réel du 12 et 13 novembre 2026 : fermeture + 2 RTT posés
+    sandbox.__appTestHooks.setAlertPrefs({
+        joursFermeture: [{ id: 888, debut: '2026-11-11', fin: '2026-11-13', libelle: 'Viaduc du 11 novembre' }]
+    });
+    sandbox.__appTestHooks.setCalendarDate('2026-11-01');
+    const calGridNov = elementsById.get('calendar-grid-display').children;
+    const btnNov12 = calGridNov.find(b => b.dataset.date === '2026-11-12');
+    const btnNov13 = calGridNov.find(b => b.dataset.date === '2026-11-13');
+    const btnNov16 = calGridNov.find(b => b.dataset.date === '2026-11-16');
+    const btnNov17 = calGridNov.find(b => b.dataset.date === '2026-11-17');
+
+    assert.ok(btnNov12, 'Le 12/11/2026 doit exister dans le calendrier');
+    assert.ok(btnNov13, 'Le 13/11/2026 doit exister dans le calendrier');
+    assert.ok(btnNov12.className.includes('cal-day-closure-rtt'), 'Le 12/11 doit avoir le motif hachuré émeraude (RTT)');
+    assert.ok(btnNov13.className.includes('cal-day-closure-rtt'), 'Le 13/11 doit avoir le motif hachuré émeraude (RTT)');
+    assert.match(btnNov12.title, /Fermeture entreprise.*Congé RTT/);
+    assert.match(btnNov13.title, /Fermeture entreprise.*Congé RTT/);
+
+    // Les 16 et 17 novembre ne doivent PAS porter le congé RTT décalé
+    assert.equal(btnNov16.className.includes('cal-day-rtt'), false, 'Le 16/11 ne doit pas être décalé');
+    assert.equal(btnNov17.className.includes('cal-day-rtt'), false, 'Le 17/11 ne doit pas être décalé');
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TESTS DE SYNCHRONISATION ROBUSTE SUR DONNÉES SIMULÉES
+// ═══════════════════════════════════════════════════════════════════════════════
+
+test('Synchronisation robuste #1 : POST puis GET identique passe au statut synchronisé vérifié', async () => {
+    let cloudData = structuredClone(REAL_USER_DATA);
+    let postCallCount = 0;
+
+    const { sandbox, elementsById } = createAppSandbox({
+        fetchImpl: async (_url, options = {}) => {
+            if (options.method === 'POST') {
+                postCallCount++;
+                cloudData = JSON.parse(options.body);
+                return { ok: true, status: 200 };
+            }
+            return {
+                ok: true,
+                status: 200,
+                json: async () => structuredClone(cloudData)
+            };
+        }
+    });
+
+    await sandbox.__appTestHooks.initApp();
+    assert.equal(sandbox.__appTestHooks.getSyncState(), 'reussi');
+
+    // Ajout d'une absence
+    elementsById.get('type-absence').value = 'CP';
+    elementsById.get('date-debut').value = '2026-11-20';
+    elementsById.get('duree-absence').value = '1';
+    sandbox.ajouterAbsence(1800000000000);
+
+    await new Promise(r => setTimeout(r, 60));
+
+    assert.ok(postCallCount > 0, 'Un POST doit avoir été émis');
+    assert.equal(sandbox.__appTestHooks.getSyncState(), 'reussi');
+    assert.equal(elementsById.get('sync-status-text').textContent, 'Synchronisé (vérifié)');
+    assert.equal(sandbox.__appTestHooks.getAppData().pendingSync, false);
+});
+
+test('Synchronisation robuste #2 : POST puis GET ancien conserve l’état local sans faux succès', async () => {
+    const oldCloudData = structuredClone(REAL_USER_DATA);
+
+    const { sandbox, elementsById, localStorage } = createAppSandbox({
+        fetchImpl: async (_url, options = {}) => {
+            if (options.method === 'POST') {
+                return { ok: true, status: 200 };
+            }
+            // Renvoie toujours l'ancien état distant sans la nouvelle absence
+            return {
+                ok: true,
+                status: 200,
+                json: async () => structuredClone(oldCloudData)
+            };
+        }
+    });
+
+    await sandbox.__appTestHooks.initApp();
+
+    elementsById.get('type-absence').value = 'RTT';
+    elementsById.get('date-debut').value = '2026-12-01';
+    elementsById.get('duree-absence').value = '1';
+    sandbox.ajouterAbsence(1800000010000);
+
+    await new Promise(r => setTimeout(r, 60));
+
+    // Ne doit pas être "reussi"
+    assert.notEqual(sandbox.__appTestHooks.getSyncState(), 'reussi');
+    assert.equal(sandbox.__appTestHooks.getSyncState(), 'local');
+    assert.match(elementsById.get('sync-status-text').textContent, /Enregistré en local \(envoi cloud effectué\)/);
+
+    // Les données locales et le localStorage doivent avoir conservé la nouvelle absence
+    const local = JSON.parse(localStorage.getItem('conges_rtt_data_v2'));
+    assert.equal(local.absences.some(a => a.date === '2026-12-01'), true, 'L’absence locale est strictement conservée');
+});
+
+test('Synchronisation robuste #3 : modification hors ligne puis reconnexion préserve les données locales', async () => {
+    const localData = {
+        ...structuredClone(REAL_USER_DATA),
+        absences: [
+            ...structuredClone(REAL_USER_DATA.absences),
+            { id: 999999, type: 'RTT', date: '2026-12-04', duree: 1 }
+        ],
+        updatedAt: 1799000000000,
+        pendingSync: true
+    };
+
+    const staleCloud = {
+        ...structuredClone(REAL_USER_DATA),
+        updatedAt: 1798000000000
+    };
+
+    const { sandbox, elementsById } = createAppSandbox({
+        localStorageInit: {
+            conges_rtt_data_v2: JSON.stringify(localData)
+        },
+        fetchImpl: async () => ({
+            ok: true,
+            status: 200,
+            json: async () => structuredClone(staleCloud)
+        })
+    });
+
+    await sandbox.__appTestHooks.initApp();
+
+    const appData = sandbox.__appTestHooks.getAppData();
+    assert.equal(appData.absences.some(a => a.id === 999999), true, 'L’absence hors-ligne est préservée');
+    assert.equal(sandbox.__appTestHooks.getSyncState(), 'conflit', 'Le conflit local/distant est signalé sans écrasement');
+});
+
+test('Synchronisation robuste #4 : deux sauvegardes rapprochées avec réponse ancienne en retard ne remplacent pas l’état récent', async () => {
+    let getPayloadToReturn = null;
+
+    const { sandbox, elementsById } = createAppSandbox({
+        fetchImpl: async (_url, options = {}) => {
+            if (options.method === 'POST') {
+                return { ok: true, status: 200 };
+            }
+            return {
+                ok: true,
+                status: 200,
+                json: async () => structuredClone(getPayloadToReturn)
+            };
+        }
+    });
+
+    await sandbox.__appTestHooks.initApp();
+
+    // 1re modif à t1
+    elementsById.get('type-absence').value = 'CP';
+    elementsById.get('date-debut').value = '2026-12-10';
+    elementsById.get('duree-absence').value = '1';
+    sandbox.ajouterAbsence(1800000001000);
+
+    // 2e modif très rapide à t2
+    elementsById.get('type-absence').value = 'CP';
+    elementsById.get('date-debut').value = '2026-12-11';
+    elementsById.get('duree-absence').value = '1';
+    sandbox.ajouterAbsence(1800000002000);
+
+    // Le GET de contrôle répond avec seulement l'état de la 1re sauvegarde (retard)
+    getPayloadToReturn = {
+        ...structuredClone(REAL_USER_DATA),
+        absences: [
+            ...structuredClone(REAL_USER_DATA.absences),
+            { id: 1800000001000, type: 'CP', date: '2026-12-10', duree: 1 }
+        ],
+        updatedAt: 1800000001000
+    };
+
+    await new Promise(r => setTimeout(r, 80));
+
+    const local = sandbox.__appTestHooks.getAppData();
+    assert.ok(local.absences.some(a => a.date === '2026-12-10'), 'Absence 1 conservée');
+    assert.ok(local.absences.some(a => a.date === '2026-12-11'), 'Absence 2 conservée');
+    assert.notEqual(sandbox.__appTestHooks.getSyncState(), 'reussi', 'Ne doit pas valider à tort la synchro de la version récente');
 });
 
 

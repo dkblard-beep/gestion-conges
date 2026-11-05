@@ -2260,6 +2260,11 @@ html[data-theme="dark"] .cal-day-closure-rtt {
   border-color: rgb(51 65 85 / 0.5);
 }
 
+.dark\:border-slate-800:is(.dark *) {
+  --tw-border-opacity: 1;
+  border-color: rgb(30 41 59 / var(--tw-border-opacity, 1));
+}
+
 .dark\:bg-emerald-950\/30:is(.dark *) {
   background-color: rgb(2 44 34 / 0.3);
 }
@@ -2296,6 +2301,11 @@ html[data-theme="dark"] .cal-day-closure-rtt {
 .dark\:text-slate-100:is(.dark *) {
   --tw-text-opacity: 1;
   color: rgb(241 245 249 / var(--tw-text-opacity, 1));
+}
+
+.dark\:text-slate-200:is(.dark *) {
+  --tw-text-opacity: 1;
+  color: rgb(226 232 240 / var(--tw-text-opacity, 1));
 }
 
 .dark\:text-slate-300:is(.dark *) {

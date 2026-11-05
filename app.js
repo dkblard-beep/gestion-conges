@@ -401,7 +401,7 @@
 
         history.forEach(entry => {
             const row = document.createElement('div');
-            row.className = 'flex items-center justify-between gap-2 p-2.5 rounded-xl bg-white border border-slate-200';
+            row.className = 'flex items-center justify-between gap-2 p-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700';
             const dateStr = new Date(entry.savedAt).toLocaleString('fr-FR', {
                 day: '2-digit',
                 month: '2-digit',
@@ -413,8 +413,8 @@
 
             row.innerHTML = `
                 <div>
-                    <div class="font-semibold text-slate-900">${entry.label || 'Sauvegarde'}</div>
-                    <div class="text-slate-500">${dateStr} • ${count} absence${count > 1 ? 's' : ''}</div>
+                    <div class="font-semibold text-slate-900 dark:text-slate-100">${entry.label || 'Sauvegarde'}</div>
+                    <div class="text-slate-500 dark:text-slate-400">${dateStr} • ${count} absence${count > 1 ? 's' : ''}</div>
                 </div>
                 <button type="button" class="btn-secondary !py-1 !px-2.5 text-xs">Restaurer</button>
             `;
@@ -2315,7 +2315,9 @@
         setCalendarDate: (dateOrStr) => {
             currentCalendarDate = dateOrStr instanceof Date ? new Date(dateOrStr) : (AppEngine.parseLocalDate(dateOrStr) || new Date(dateOrStr));
             renderCalendar();
-        }
+        },
+        saveCloud: (now) => sauvegarderDonneesCloud(now),
+        initApp: () => initApp()
     };
 
     if (typeof document !== 'undefined') {
