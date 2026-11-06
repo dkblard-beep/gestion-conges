@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'conges-pwa-cache-';
-const CACHE_NAME = `${CACHE_PREFIX}v25`; // Incrémenter la version met à jour le cache de l'application
+const CACHE_NAME = `${CACHE_PREFIX}v26`; // Incrémenter la version met à jour le cache de l'application
 const URLS_TO_CACHE = [
   './',
   './index.html',

@@ -128,9 +128,41 @@ html.dark .bg-slate-50,
 html[data-theme="dark"] .bg-slate-50,
 html.dark .bg-surface,
 html[data-theme="dark"] .bg-surface,
+html.dark .bg-surface-bright,
+html[data-theme="dark"] .bg-surface-bright,
 html.dark .bg-surface-container-lowest,
 html[data-theme="dark"] .bg-surface-container-lowest {
     background-color: #1e293b;
+}
+
+html.dark .bg-primary-light,
+html[data-theme="dark"] .bg-primary-light {
+    background-color: #1e1b4b;
+    color: #e0e7ff;
+}
+
+html.dark .hover\:bg-surface-bright:hover,
+html[data-theme="dark"] .hover\:bg-surface-bright:hover,
+html.dark .hover\:bg-slate-50:hover,
+html[data-theme="dark"] .hover\:bg-slate-50:hover {
+    background-color: #334155;
+}
+
+html.dark .hover\:bg-primary-light:hover,
+html[data-theme="dark"] .hover\:bg-primary-light:hover {
+    background-color: #312e81;
+}
+
+html.dark .bg-purple-50,
+html[data-theme="dark"] .bg-purple-50,
+html.dark .bg-purple-50\/50,
+html[data-theme="dark"] .bg-purple-50\/50 {
+    background-color: #2e1065;
+}
+
+html.dark .border-purple-100,
+html[data-theme="dark"] .border-purple-100 {
+    border-color: #6b21a8;
 }
 
 html.dark .border-slate-200,

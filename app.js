@@ -20,125 +20,125 @@
     // Cache des références DOM
     const DOM = {};
     function initDOM() {
-        DOM.soldeCp             = document.getElementById('solde-cp');
-        DOM.soldeRtt            = document.getElementById('solde-rtt');
-        DOM.resteCpLabel        = document.getElementById('reste-cp-label');
-        DOM.resteRttLabel       = document.getElementById('reste-rtt-label');
-        DOM.totalCp             = document.getElementById('total-cp');
-        DOM.totalRtt            = document.getElementById('total-rtt');
-        DOM.prisCp              = document.getElementById('pris-cp');
-        DOM.prisRtt             = document.getElementById('pris-rtt');
-        DOM.progressTextCp      = document.getElementById('progress-text-cp');
-        DOM.progressTextRtt     = document.getElementById('progress-text-rtt');
-        DOM.progressCp          = document.getElementById('progress-cp');
-        DOM.progressRtt         = document.getElementById('progress-rtt');
-        DOM.negativeBadgeCp     = document.getElementById('negative-badge-cp');
-        DOM.negativeBadgeRtt    = document.getElementById('negative-badge-rtt');
-        DOM.barAccentCp         = document.getElementById('bar-accent-cp');
-        DOM.barAccentRtt        = document.getElementById('bar-accent-rtt');
-        DOM.initCp              = document.getElementById('init-cp');
-        DOM.initRtt             = document.getElementById('init-rtt');
-        DOM.initPentecote       = document.getElementById('init-pentecote-travaille');
-        DOM.initSeuilAlerte     = document.getElementById('init-seuil-alerte');
-        DOM.initEcheanceCp      = document.getElementById('init-echeance-cp');
-        DOM.initThemeMode       = document.getElementById('init-theme-mode');
-        DOM.gaugeCircleCp       = document.getElementById('gauge-circle-cp');
-        DOM.gaugeCircleRtt      = document.getElementById('gauge-circle-rtt');
-        DOM.gaugeRatioCp        = document.getElementById('gauge-ratio-cp');
-        DOM.gaugeRatioRtt       = document.getElementById('gauge-ratio-rtt');
-        DOM.fabNewAbsence       = document.getElementById('fab-new-absence');
-        DOM.labelCpYear         = document.getElementById('label-cp-year');
-        DOM.labelCpYearNext     = document.getElementById('label-cp-year-next');
-        DOM.labelRttYear        = document.getElementById('label-rtt-year');
-        DOM.retraiteLegal       = document.getElementById('init-retraite-legal');
-        DOM.retraiteAnticipe    = document.getElementById('init-retraite-anticipe');
-        DOM.selectCp            = document.getElementById('select-cp-period');
-        DOM.selectRtt           = document.getElementById('select-rtt-period');
-        DOM.expirationAlerts    = document.getElementById('expiration-alerts');
-        DOM.filterHistoryType   = document.getElementById('filter-history-type');
+        DOM.soldeCp = document.getElementById('solde-cp');
+        DOM.soldeRtt = document.getElementById('solde-rtt');
+        DOM.resteCpLabel = document.getElementById('reste-cp-label');
+        DOM.resteRttLabel = document.getElementById('reste-rtt-label');
+        DOM.totalCp = document.getElementById('total-cp');
+        DOM.totalRtt = document.getElementById('total-rtt');
+        DOM.prisCp = document.getElementById('pris-cp');
+        DOM.prisRtt = document.getElementById('pris-rtt');
+        DOM.progressTextCp = document.getElementById('progress-text-cp');
+        DOM.progressTextRtt = document.getElementById('progress-text-rtt');
+        DOM.progressCp = document.getElementById('progress-cp');
+        DOM.progressRtt = document.getElementById('progress-rtt');
+        DOM.negativeBadgeCp = document.getElementById('negative-badge-cp');
+        DOM.negativeBadgeRtt = document.getElementById('negative-badge-rtt');
+        DOM.barAccentCp = document.getElementById('bar-accent-cp');
+        DOM.barAccentRtt = document.getElementById('bar-accent-rtt');
+        DOM.initCp = document.getElementById('init-cp');
+        DOM.initRtt = document.getElementById('init-rtt');
+        DOM.initPentecote = document.getElementById('init-pentecote-travaille');
+        DOM.initSeuilAlerte = document.getElementById('init-seuil-alerte');
+        DOM.initEcheanceCp = document.getElementById('init-echeance-cp');
+        DOM.initThemeMode = document.getElementById('init-theme-mode');
+        DOM.gaugeCircleCp = document.getElementById('gauge-circle-cp');
+        DOM.gaugeCircleRtt = document.getElementById('gauge-circle-rtt');
+        DOM.gaugeRatioCp = document.getElementById('gauge-ratio-cp');
+        DOM.gaugeRatioRtt = document.getElementById('gauge-ratio-rtt');
+        DOM.fabNewAbsence = document.getElementById('fab-new-absence');
+        DOM.labelCpYear = document.getElementById('label-cp-year');
+        DOM.labelCpYearNext = document.getElementById('label-cp-year-next');
+        DOM.labelRttYear = document.getElementById('label-rtt-year');
+        DOM.retraiteLegal = document.getElementById('init-retraite-legal');
+        DOM.retraiteAnticipe = document.getElementById('init-retraite-anticipe');
+        DOM.selectCp = document.getElementById('select-cp-period');
+        DOM.selectRtt = document.getElementById('select-rtt-period');
+        DOM.expirationAlerts = document.getElementById('expiration-alerts');
+        DOM.filterHistoryType = document.getElementById('filter-history-type');
         DOM.filterHistoryPeriod = document.getElementById('filter-history-period');
-        DOM.historiqueList      = document.getElementById('historique-list');
-        DOM.historiqueVide      = document.getElementById('historique-vide');
-        DOM.retraiteCard        = document.getElementById('retraite-card');
-        DOM.retraiteExpanded    = document.getElementById('retraite-content-expanded');
-        DOM.retraiteMinimized   = document.getElementById('retraite-content-minimized');
-        DOM.retraiteIcon        = document.getElementById('retraite-toggle-icon');
-        DOM.dateDebut           = document.getElementById('date-debut');
-        DOM.typeAbsence         = document.getElementById('type-absence');
-        DOM.dureeAbsence        = document.getElementById('duree-absence');
-        DOM.btnSubmitAbsence    = document.getElementById('btn-submit-absence');
-        DOM.modalAbsenceTitle   = document.getElementById('modal-absence-title');
-        DOM.modalAbsenceIcon    = document.getElementById('modal-absence-icon');
-        DOM.previewBox          = document.getElementById('absence-preview');
-        DOM.previewDates        = document.getElementById('preview-dates');
-        DOM.previewShift        = document.getElementById('preview-shift');
-        DOM.previewBalance      = document.getElementById('preview-balance');
+        DOM.historiqueList = document.getElementById('historique-list');
+        DOM.historiqueVide = document.getElementById('historique-vide');
+        DOM.retraiteCard = document.getElementById('retraite-card');
+        DOM.retraiteExpanded = document.getElementById('retraite-content-expanded');
+        DOM.retraiteMinimized = document.getElementById('retraite-content-minimized');
+        DOM.retraiteIcon = document.getElementById('retraite-toggle-icon');
+        DOM.dateDebut = document.getElementById('date-debut');
+        DOM.typeAbsence = document.getElementById('type-absence');
+        DOM.dureeAbsence = document.getElementById('duree-absence');
+        DOM.btnSubmitAbsence = document.getElementById('btn-submit-absence');
+        DOM.modalAbsenceTitle = document.getElementById('modal-absence-title');
+        DOM.modalAbsenceIcon = document.getElementById('modal-absence-icon');
+        DOM.previewBox = document.getElementById('absence-preview');
+        DOM.previewDates = document.getElementById('preview-dates');
+        DOM.previewShift = document.getElementById('preview-shift');
+        DOM.previewBalance = document.getElementById('preview-balance');
         DOM.previewNegativeWarn = document.getElementById('preview-negative-warning');
-        DOM.modalErrorMessage   = document.getElementById('modal-error-message');
-        DOM.modalErrorText      = document.getElementById('modal-error-text');
-        DOM.errorMessage        = document.getElementById('error-message');
-        DOM.errorText           = document.getElementById('error-text');
-        DOM.undoBanner          = document.getElementById('undo-banner');
-        DOM.undoText            = document.getElementById('undo-text');
-        DOM.btnUndoAction       = document.getElementById('btn-undo-action');
-        DOM.conflictBanner      = document.getElementById('conflict-banner');
+        DOM.modalErrorMessage = document.getElementById('modal-error-message');
+        DOM.modalErrorText = document.getElementById('modal-error-text');
+        DOM.errorMessage = document.getElementById('error-message');
+        DOM.errorText = document.getElementById('error-text');
+        DOM.undoBanner = document.getElementById('undo-banner');
+        DOM.undoText = document.getElementById('undo-text');
+        DOM.btnUndoAction = document.getElementById('btn-undo-action');
+        DOM.conflictBanner = document.getElementById('conflict-banner');
         DOM.conflictDescription = document.getElementById('conflict-description');
-        DOM.syncStatusDot       = document.getElementById('sync-status-dot');
-        DOM.syncStatusText      = document.getElementById('sync-status-text');
-        DOM.configSection       = document.getElementById('config-section');
-        DOM.backupHistoryList   = document.getElementById('backup-history-list');
-        DOM.backupHistoryEmpty  = document.getElementById('backup-history-empty');
-        DOM.formAbsence         = document.getElementById('form-absence');
-        DOM.anticipeContainer   = document.getElementById('anticipe-container');
-        DOM.decompteLegal       = document.getElementById('decompte-legal');
+        DOM.syncStatusDot = document.getElementById('sync-status-dot');
+        DOM.syncStatusText = document.getElementById('sync-status-text');
+        DOM.configSection = document.getElementById('config-section');
+        DOM.backupHistoryList = document.getElementById('backup-history-list');
+        DOM.backupHistoryEmpty = document.getElementById('backup-history-empty');
+        DOM.formAbsence = document.getElementById('form-absence');
+        DOM.anticipeContainer = document.getElementById('anticipe-container');
+        DOM.decompteLegal = document.getElementById('decompte-legal');
         DOM.decompteLegalDetail = document.getElementById('decompte-legal-detail');
-        DOM.dateLegalLabel      = document.getElementById('date-legal-label');
-        DOM.decompteAnticipe    = document.getElementById('decompte-anticipe');
+        DOM.dateLegalLabel = document.getElementById('date-legal-label');
+        DOM.decompteAnticipe = document.getElementById('decompte-anticipe');
         DOM.decompteAnticipeDetail = document.getElementById('decompte-anticipe-detail');
-        DOM.dateAnticipeLabel   = document.getElementById('date-anticipe-label');
-        DOM.decompteMini        = document.getElementById('decompte-mini');
-        DOM.calendarGrid        = document.getElementById('calendar-grid-display');
-        DOM.calendarMonthLabel  = document.getElementById('calendar-month-label-display');
+        DOM.dateAnticipeLabel = document.getElementById('date-anticipe-label');
+        DOM.decompteMini = document.getElementById('decompte-mini');
+        DOM.calendarGrid = document.getElementById('calendar-grid-display');
+        DOM.calendarMonthLabel = document.getElementById('calendar-month-label-display');
         DOM.btnToggleDeleteLock = document.getElementById('btn-toggle-delete-lock');
-        DOM.deleteLockIcon      = document.getElementById('delete-lock-icon');
-        DOM.deleteLockLabel     = document.getElementById('delete-lock-label');
-        DOM.simType             = document.getElementById('sim-type');
-        DOM.simMode             = document.getElementById('sim-mode');
-        DOM.simDateDebut        = document.getElementById('sim-date-debut');
-        DOM.simDuree            = document.getElementById('sim-duree');
-        DOM.simDateFin          = document.getElementById('sim-date-fin');
-        DOM.simDureeContainer   = document.getElementById('sim-duree-container');
+        DOM.deleteLockIcon = document.getElementById('delete-lock-icon');
+        DOM.deleteLockLabel = document.getElementById('delete-lock-label');
+        DOM.simType = document.getElementById('sim-type');
+        DOM.simMode = document.getElementById('sim-mode');
+        DOM.simDateDebut = document.getElementById('sim-date-debut');
+        DOM.simDuree = document.getElementById('sim-duree');
+        DOM.simDateFin = document.getElementById('sim-date-fin');
+        DOM.simDureeContainer = document.getElementById('sim-duree-container');
         DOM.simDateFinContainer = document.getElementById('sim-date-fin-container');
-        DOM.simResultSummary    = document.getElementById('sim-result-summary');
-        DOM.simResultShift      = document.getElementById('sim-result-shift');
-        DOM.simResultDetails    = document.getElementById('sim-result-details');
-        DOM.simResultWarning    = document.getElementById('sim-result-warning');
-        DOM.btnSimToModal       = document.getElementById('btn-sim-to-modal');
-        DOM.bridgesYearLabel    = document.getElementById('bridges-year-label');
-        DOM.bridgesList         = document.getElementById('bridges-list');
-        DOM.bridgesEmpty        = document.getElementById('bridges-empty');
+        DOM.simResultSummary = document.getElementById('sim-result-summary');
+        DOM.simResultShift = document.getElementById('sim-result-shift');
+        DOM.simResultDetails = document.getElementById('sim-result-details');
+        DOM.simResultWarning = document.getElementById('sim-result-warning');
+        DOM.btnSimToModal = document.getElementById('btn-sim-to-modal');
+        DOM.bridgesYearLabel = document.getElementById('bridges-year-label');
+        DOM.bridgesList = document.getElementById('bridges-list');
+        DOM.bridgesEmpty = document.getElementById('bridges-empty');
         DOM.initRappelOuverture = document.getElementById('init-rappel-ouverture');
         DOM.notifPermissionStatus = document.getElementById('notif-permission-status');
         DOM.openingReminderBanner = document.getElementById('opening-reminder-banner');
         DOM.openingReminderText = document.getElementById('opening-reminder-text');
-        DOM.statsYearLabel      = document.getElementById('stats-year-label');
-        DOM.statsTauxGlobal     = document.getElementById('stats-taux-global');
-        DOM.statsTauxDetail     = document.getElementById('stats-taux-detail');
+        DOM.statsYearLabel = document.getElementById('stats-year-label');
+        DOM.statsTauxGlobal = document.getElementById('stats-taux-global');
+        DOM.statsTauxDetail = document.getElementById('stats-taux-detail');
         DOM.statsMoisPlusCharge = document.getElementById('stats-mois-plus-charge');
         DOM.statsMoisPlusChargeDetail = document.getElementById('stats-mois-plus-charge-detail');
-        DOM.statsTotalAnnee     = document.getElementById('stats-total-annee');
+        DOM.statsTotalAnnee = document.getElementById('stats-total-annee');
         DOM.statsTotalAnneeDetail = document.getElementById('stats-total-annee-detail');
         DOM.statsMensuellesGrid = document.getElementById('stats-mensuelles-grid');
-        DOM.fermetureEditId     = document.getElementById('fermeture-edit-id');
-        DOM.fermetureDebut      = document.getElementById('fermeture-debut');
-        DOM.fermetureFin        = document.getElementById('fermeture-fin');
-        DOM.fermetureLibelle    = document.getElementById('fermeture-libelle');
-        DOM.fermeturesList      = document.getElementById('fermetures-list');
-        DOM.fermeturesVide      = document.getElementById('fermetures-vide');
-        DOM.fermetureError     = document.getElementById('fermeture-error');
-        DOM.btnSaveFermeture    = document.getElementById('btn-save-fermeture');
+        DOM.fermetureEditId = document.getElementById('fermeture-edit-id');
+        DOM.fermetureDebut = document.getElementById('fermeture-debut');
+        DOM.fermetureFin = document.getElementById('fermeture-fin');
+        DOM.fermetureLibelle = document.getElementById('fermeture-libelle');
+        DOM.fermeturesList = document.getElementById('fermetures-list');
+        DOM.fermeturesVide = document.getElementById('fermetures-vide');
+        DOM.fermetureError = document.getElementById('fermeture-error');
+        DOM.btnSaveFermeture = document.getElementById('btn-save-fermeture');
         DOM.btnSaveFermetureLabel = document.getElementById('btn-save-fermeture-label');
-        DOM.btnCancelFermeture  = document.getElementById('btn-cancel-fermeture');
+        DOM.btnCancelFermeture = document.getElementById('btn-cancel-fermeture');
     }
 
     let appData = AppConfig.createEmptyData();
@@ -212,7 +212,7 @@
         const isEffectiveDark = normalized === 'dark' || (normalized === 'auto' && prefersDark);
 
         if (docEl) {
-            if ( docEl.setAttribute ) {
+            if (docEl.setAttribute) {
                 docEl.setAttribute('data-theme', normalized);
             }
             if (docEl.dataset) {
@@ -401,7 +401,7 @@
 
         history.forEach(entry => {
             const row = document.createElement('div');
-            row.className = 'flex items-center justify-between gap-2 p-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700';
+            row.className = 'flex items-center justify-between gap-2 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700';
             const dateStr = new Date(entry.savedAt).toLocaleString('fr-FR', {
                 day: '2-digit',
                 month: '2-digit',
@@ -1223,13 +1223,23 @@
                 cell.dataset.month = String(m.mois);
                 const isBusiest = stats.moisPlusCharge && stats.moisPlusCharge.mois === m.mois;
                 cell.className = isBusiest
-                    ? 'p-2 rounded-xl bg-primary-light border border-primary/30 flex flex-col items-center justify-between gap-1'
-                    : 'p-2 rounded-xl bg-slate-50 border border-slate-200 flex flex-col items-center justify-between gap-1';
+                    ?'p-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border-2 border-indigo-500/70 dark:border-indigo-400 flex flex-col items-center justify-between gap-1 shadow-sm'
+                    : 'p-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 flex flex-col items-center justify-between gap-1';
+
+                const labelClass = isBusiest
+                    ? 'font-bold text-indigo-950 dark:text-indigo-200'
+                    : 'font-bold text-slate-700 dark:text-slate-200';
+                const totalClass = isBusiest
+                    ? 'text-sm font-bold text-indigo-900 dark:text-white'
+                    : 'text-sm font-bold text-slate-900 dark:text-white';
+                const detailClass = isBusiest
+                    ? 'flex flex-col text-[10px] leading-tight text-indigo-800/90 dark:text-indigo-300'
+                    : 'flex flex-col text-[10px] leading-tight text-slate-600 dark:text-slate-400';
 
                 cell.innerHTML = `
-                    <span class="font-bold text-slate-700">${m.label}</span>
-                    <span class="text-sm font-bold text-slate-900">${formatDaysNumber(m.total)} j</span>
-                    <div class="flex flex-col text-[10px] leading-tight text-slate-600">
+                    <span class="${labelClass}">${m.label}</span>
+                    <span class="${totalClass}">${formatDaysNumber(m.total)} j</span>
+                    <div class="${detailClass}">
                         <span>CP : ${formatDaysNumber(m.cp)}</span>
                         <span>RTT : ${formatDaysNumber(m.rtt)}</span>
                     </div>
@@ -1393,16 +1403,16 @@
             }
             const nav = document.getElementById(`nav-${t}`);
             if (nav) {
-                nav.classList.remove('text-primary', 'bg-primary-light');
-                nav.classList.add('text-slate-600');
+                nav.classList.remove('text-primary', 'bg-primary-light', 'dark:bg-indigo-950/60', 'dark:text-indigo-200');
+                nav.classList.add('text-slate-600', 'dark:text-slate-400');
             }
         });
 
         // Gérer aussi l'ancien id de bouton nav-calendar pour les tests ou intégrations existantes
         const legacyNavCalendar = document.getElementById('nav-calendar');
         if (legacyNavCalendar && tabName !== 'dashboard') {
-            legacyNavCalendar.classList.remove('text-primary', 'bg-primary-light');
-            legacyNavCalendar.classList.add('text-slate-600');
+            legacyNavCalendar.classList.remove('text-primary', 'bg-primary-light', 'dark:bg-indigo-950/60', 'dark:text-indigo-200');
+            legacyNavCalendar.classList.add('text-slate-600', 'dark:text-slate-400');
         }
 
         const activeEl = document.getElementById(`tab-${tabName}`);
@@ -1413,8 +1423,8 @@
 
         const activeNav = document.getElementById(`nav-${tabName}`);
         if (activeNav) {
-            activeNav.classList.remove('text-slate-600');
-            activeNav.classList.add('text-primary', 'bg-primary-light');
+            activeNav.classList.remove('text-slate-600', 'dark:text-slate-400');
+            activeNav.classList.add('text-primary', 'bg-primary-light', 'dark:bg-indigo-950/60', 'dark:text-indigo-200');
         }
     };
 
@@ -2011,7 +2021,7 @@
                 : 'badge-rtt';
 
             const item = document.createElement('div');
-            item.className = 'p-4 flex items-center justify-between hover:bg-surface-bright transition-colors border-b border-surface-container-high/40 last:border-0';
+            item.className = 'p-4 flex items-center justify-between hover:bg-slate-100 dark:hover:bg-slate-800/70 focus-within:bg-slate-100 dark:focus-within:bg-slate-800/70 transition-colors border-b border-surface-container-high/40 last:border-0';
 
             const dureeStr = formatDaysNumber(a.duree);
             const isConfirmingThis = isDeleteUnlocked && pendingDeleteConfirmId === a.id;
@@ -2031,12 +2041,12 @@
                     </div>
                 </div>
                 <div class="flex items-center gap-1 shrink-0">
-                    <button type="button" data-action="edit" title="Modifier cette demande" class="text-on-surface-variant hover:text-primary transition-colors p-2 rounded-full hover:bg-primary-light cursor-pointer" aria-label="Modifier">
+                    <button type="button" data-action="edit" title="Modifier cette demande" class="text-on-surface-variant hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors p-2 rounded-full hover:bg-indigo-50 dark:hover:bg-indigo-950/50 cursor-pointer" aria-label="Modifier">
                         <span class="material-symbols-outlined text-[20px]">edit</span>
                     </button>
                     ${isConfirmingThis
-                        ? `<button type="button" data-action="confirm-delete" class="px-2.5 py-1 rounded-lg bg-error-light border border-error/20 text-on-error-container text-xs font-bold cursor-pointer">Confirmer ?</button>
-                           <button type="button" data-action="cancel-delete" class="px-2 py-1 rounded-lg bg-slate-100 text-slate-600 text-xs font-medium cursor-pointer">Non</button>`
+                        ? `<button type="button" data-action="confirm-delete" class="px-2.5 py-1 rounded-lg bg-error-light dark:bg-red-950/40 border border-error/20 dark:border-red-500/40 text-on-error-container dark:text-red-200 text-xs font-bold cursor-pointer">Confirmer ?</button>
+                           <button type="button" data-action="cancel-delete" class="px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-medium cursor-pointer">Non</button>`
                         : `<button type="button" data-action="delete" ${isDeleteUnlocked ? '' : 'disabled'} title="${deleteBtnTitle}" class="${deleteBtnClass}" aria-label="Supprimer">
                                <span class="material-symbols-outlined text-[20px]">delete</span>
                            </button>`

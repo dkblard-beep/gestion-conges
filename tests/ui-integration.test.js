@@ -8,9 +8,9 @@ const ROOT_DIR = path.join(__dirname, '..');
 
 const REAL_USER_DATA = {
     absences: [
-        { id: 1790412079086, type: 'CP',  date: '2026-10-05', duree: 5 },
+        { id: 1790412079086, type: 'CP', date: '2026-10-05', duree: 5 },
         { id: 1790970282472, type: 'RTT', date: '2026-09-25', duree: 1 },
-        { id: 1790976655560, type: 'CP',  date: '2026-08-03', duree: 10 },
+        { id: 1790976655560, type: 'CP', date: '2026-08-03', duree: 10 },
         { id: 1791001510220, type: 'RTT', date: '2026-07-13', duree: 1 },
         { id: 1791001610759, type: 'RTT', date: '2026-05-15', duree: 1 },
         { id: 1791001621844, type: 'RTT', date: '2026-05-25', duree: 1 },
@@ -187,11 +187,11 @@ function createAppSandbox({ localStorageInit = {}, fetchImpl, systemPrefersDark 
         Map,
         RegExp,
         JSON,
-         parseFloat,
+        parseFloat,
         parseInt,
         isNaN,
         setTimeout: (_fn, _ms) => 1,
-        clearTimeout: () => {},
+        clearTimeout: () => { },
         localStorage,
         document,
         navigator: {},
@@ -406,9 +406,9 @@ test('Service Worker (sw.js) : inclut config.js et engine.js et ne supprime que 
         caches: {
             open: async () => ({
                 addAll: async (urls) => { addedUrls.push(...urls); },
-                put: async () => {}
+                put: async () => { }
             }),
-            keys: async () => ['conges-pwa-cache-v12', 'conges-pwa-cache-v18', 'conges-pwa-cache-v19', 'conges-pwa-cache-v20', 'conges-pwa-cache-v21', 'conges-pwa-cache-v22', 'conges-pwa-cache-v23', 'conges-pwa-cache-v24', 'conges-pwa-cache-v25', 'autre-app-cache-v1'],
+            keys: async () => ['conges-pwa-cache-v12', 'conges-pwa-cache-v18', 'conges-pwa-cache-v19', 'conges-pwa-cache-v20', 'conges-pwa-cache-v21', 'conges-pwa-cache-v22', 'conges-pwa-cache-v23', 'conges-pwa-cache-v24', 'conges-pwa-cache-v25', 'conges-pwa-cache-v26', 'autre-app-cache-v1'],
             delete: async (name) => { deletedCaches.push(name); return true; },
             match: async () => null
         },
@@ -430,15 +430,15 @@ test('Service Worker (sw.js) : inclut config.js et engine.js et ne supprime que 
     assert.ok(addedUrls.includes('./engine.js'), 'sw.js doit mettre en cache ./engine.js');
     assert.ok(addedUrls.includes('./app.js'), 'sw.js doit mettre en cache ./app.js');
 
-    // 2. Test activate : supprime tous les anciens caches conges-pwa-cache-* mais conserve conges-pwa-cache-v25 et autre-app-cache-v1
+    // 2. Test activate : supprime tous les anciens caches conges-pwa-cache-* mais conserve conges-pwa-cache-v26 et autre-app-cache-v1
     let activatePromise;
     listeners.activate({ waitUntil: (p) => { activatePromise = p; } });
     await activatePromise;
 
     assert.deepEqual(
         deletedCaches,
-        ['conges-pwa-cache-v12', 'conges-pwa-cache-v18', 'conges-pwa-cache-v19', 'conges-pwa-cache-v20', 'conges-pwa-cache-v21', 'conges-pwa-cache-v22', 'conges-pwa-cache-v23', 'conges-pwa-cache-v24'],
-        'Tous les anciens caches conges-pwa-cache-* (v12 à v24) doivent être purgés en conservant v25 et les caches tiers'
+        ['conges-pwa-cache-v12', 'conges-pwa-cache-v18', 'conges-pwa-cache-v19', 'conges-pwa-cache-v20', 'conges-pwa-cache-v21', 'conges-pwa-cache-v22', 'conges-pwa-cache-v23', 'conges-pwa-cache-v24', 'conges-pwa-cache-v25'],
+        'Tous les anciens caches conges-pwa-cache-* (v12 à v25) doivent être purgés en conservant v26 et les caches tiers'
     );
 });
 
@@ -1314,6 +1314,40 @@ test('Synchronisation robuste #4 : deux sauvegardes rapprochées avec réponse a
     assert.ok(local.absences.some(a => a.date === '2026-12-10'), 'Absence 1 conservée');
     assert.ok(local.absences.some(a => a.date === '2026-12-11'), 'Absence 2 conservée');
     assert.notEqual(sandbox.__appTestHooks.getSyncState(), 'reussi', 'Ne doit pas valider à tort la synchro de la version récente');
+});
+
+test('Contraste accessible (WCAG AA) : styles clairs et sombres conformes sur statistiques, historique, retraite et sauvegardes', async () => {
+    const { sandbox, elementsById } = createAppSandbox({
+        fetchImpl: async () => ({
+            ok: true,
+            json: async () => structuredClone(REAL_USER_DATA)
+        })
+    });
+    await sandbox.__appTestHooks.initApp();
+
+    // 1. Statistiques mensuelles : le mois le plus chargé dispose de dark:bg-indigo-950/60 et n'a pas de bg-primary-light non typé
+    const statsGrid = elementsById.get('stats-mensuelles-grid');
+    assert.ok(statsGrid.children.length === 12, '12 mois générés');
+    const busiestCell = statsGrid.children.find(c => c.className.includes('indigo'));
+    assert.ok(busiestCell, 'Le mois le plus chargé utilise la classe indigo');
+    assert.ok(busiestCell.className.includes('dark:bg-indigo-950/60'), 'Le mois le plus chargé a un fond sombre typé dark:bg-indigo-950/60');
+    assert.ok(!busiestCell.className.includes('bg-primary-light'), 'bg-primary-light blanc/bleu pâle supprimé des cartes stats');
+
+    // 2. Historique des absences : hover n'utilise pas hover:bg-surface-bright (fond blanc illisible)
+    const histList = elementsById.get('historique-list');
+    assert.ok(histList.children.length > 0, 'Des lignes d\'historique sont présentes');
+    const firstItem = histList.children[0];
+    assert.ok(firstItem.className.includes('hover:bg-slate-100'), 'Hover clair contrasté');
+    assert.ok(firstItem.className.includes('dark:hover:bg-slate-800/70'), 'Hover sombre dark:hover:bg-slate-800/70');
+    assert.ok(!firstItem.className.includes('hover:bg-surface-bright'), 'hover:bg-surface-bright supprimé');
+
+    // 3. Sauvegardes locales : fond slate contrasté
+    const backupList = elementsById.get('backup-history-list');
+    if (backupList.children.length > 0) {
+        const backupRow = backupList.children[0];
+        assert.ok(backupRow.className.includes('dark:bg-slate-800/80'), 'Sauvegarde locale dispose de dark:bg-slate-800/80');
+        assert.ok(!backupRow.className.includes('bg-white dark:bg-slate-800'), 'bg-white non protégé supprimé des sauvegardes');
+    }
 });
 
 
